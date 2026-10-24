@@ -1,0 +1,83 @@
+{
+  "changeformer": {
+    "name": "ChangeFormer",
+    "description": "Transformer-based Siamese network for change detection. Pre-trained on LEVIR-CD.",
+    "adapter_class": "core.inference.changeformer_adapter.ChangeFormerAdapter",
+    "checkpoint_path": "./ml/model_cache/changeformer/changeformer_levircd.pth",
+    "licence": "MIT",
+    "licence_url": "https://github.com/wgcban/ChangeFormer/blob/main/LICENSE",
+    "paper_url": "https://arxiv.org/abs/2201.01293",
+    "hf_repo": "wgcban/ChangeFormer",
+    "status": "available",
+    "recommended_for": ["urban_change", "building_footprint_change"],
+    "input_size": 256,
+    "input_bands": 3,
+    "evaluation": {
+      "dataset": "LEVIR-CD",
+      "f1": null,
+      "iou": null,
+      "note": "Run ml/evaluation/benchmark.py to populate these values"
+    },
+    "inference_config": {
+      "device": "cpu",
+      "batch_size": 1,
+      "threshold": 0.5
+    },
+    "commercial_use": true,
+    "notes": "Requires ChangeFormer model code at ml/changeformer/. Download from HuggingFace Hub."
+  },
+  "bit": {
+    "name": "BIT (Binary Interaction Transformer)",
+    "description": "Efficient transformer for remote sensing change detection.",
+    "adapter_class": "core.inference.bit_adapter.BITAdapter",
+    "checkpoint_path": "./ml/model_cache/bit/bit_levircd.pth",
+    "licence": "Apache-2.0",
+    "licence_url": "https://github.com/justchenhao/BIT_CD/blob/master/LICENSE",
+    "paper_url": "https://arxiv.org/abs/2103.00208",
+    "hf_repo": "justchenhao/BIT_CD",
+    "status": "planned",
+    "recommended_for": ["general_change", "urban_change"],
+    "input_size": 256,
+    "input_bands": 3,
+    "evaluation": {
+      "dataset": "LEVIR-CD",
+      "f1": null,
+      "iou": null,
+      "note": "Phase 1 evaluation pending"
+    },
+    "inference_config": {
+      "device": "cpu",
+      "batch_size": 1,
+      "threshold": 0.5
+    },
+    "commercial_use": true,
+    "notes": "Good accuracy-to-speed ratio. Candidate for Phase 1 benchmarking."
+  },
+  "snunet": {
+    "name": "SNUNet (Siamese NestedUNet)",
+    "description": "Dense skip-connection network for change detection.",
+    "adapter_class": "core.inference.snunet_adapter.SNUNetAdapter",
+    "checkpoint_path": "./ml/model_cache/snunet/snunet_levircd.pth",
+    "licence": "MIT",
+    "licence_url": "https://github.com/RSCD-Lab/Siam-NestedUNet/blob/master/LICENSE",
+    "paper_url": "https://arxiv.org/abs/2109.04801",
+    "hf_repo": "RSCD-Lab/SNUNet",
+    "status": "planned",
+    "recommended_for": ["fine_grained_change"],
+    "input_size": 256,
+    "input_bands": 3,
+    "evaluation": {
+      "dataset": "LEVIR-CD",
+      "f1": null,
+      "iou": null,
+      "note": "Phase 1 evaluation pending"
+    },
+    "inference_config": {
+      "device": "cpu",
+      "batch_size": 1,
+      "threshold": 0.5
+    },
+    "commercial_use": true,
+    "notes": "Higher memory usage than BIT. Good for fine-grained building change."
+  }
+}

@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+venv/
+.venv/
+env/
+*.env
+!*.env.example
+
+# Test / coverage
+.pytest_cache/
+.coverage
+coverage_html/
+htmlcov/
+*.log
+
+# ML / Models
+ml/model_cache/
+ml/evaluation/data/
+ml/evaluation/results/
+*.pth
+*.pt
+*.ckpt
+*.bin
+*.safetensors
+
+# Storage (uploaded files — never commit)
+storage/uploads/
+storage/results/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+
+# Environment files (NEVER commit secrets)
+.env
+.env.local
+.env.production
+.env.*.local
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+*.dockerignore
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Alembic versions (commit these!)
+# backend/alembic/versions/ — do NOT ignore
+
+# Logs
+logs/
+*.log
