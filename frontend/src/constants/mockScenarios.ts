@@ -1,0 +1,2874 @@
+import { MissionScenario } from "../types/satquery";
+
+export const MOCK_SCENARIOS: MissionScenario[] = [
+  {
+    "id": "scenario-1-grounding",
+    "title": "Scenario 1: Optical Infrastructure & Vessel Grounding",
+    "description": "High-resolution Sentinel-2/Cartosat scene over Visakhapatnam Port. Identifies maritime assets, berths, and storage facilities.",
+    "keywords": [
+      "vessel",
+      "dock",
+      "berth",
+      "ship",
+      "tank",
+      "infrastructure",
+      "port",
+      "crane",
+      "grounding",
+      "object",
+      "detect"
+    ],
+    "config_type": "Single Optical",
+    "files": [
+      {
+        "id": "upl_visakhapatnam_opt",
+        "filename": "S2A_MSIL2A_20241015_VISAKHAPATNAM.tif",
+        "sensor_hint": "sentinel2",
+        "bands": 12,
+        "crs": "EPSG:32644",
+        "resolution_m": 10.0,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2024-10-15T05:42:11Z",
+        "bbox": [
+          17.675,
+          83.275,
+          17.715,
+          83.325
+        ],
+        "center": [
+          17.695,
+          83.3
+        ],
+        "thumbnail_url": "https://images.unsplash.com/photo-1578575437130-527eed3abbec?auto=format&fit=crop&w=400&q=80",
+        "data_type": "Optical",
+        "file_size_mb": 48.6
+      }
+    ],
+    "default_query": "Detect and isolate all maritime vessels, cargo berths, and fuel storage tanks in the port area.",
+    "response": {
+      "text": "### Mission Analysis Summary: Visakhapatnam Port Grounding\n\n**1. Target Identification & Localization**\nThe agentic vision-language pipeline executed multi-scale spatial grounding across the 10m VNIR bands (B2, B3, B4, B8).\n\n- **Maritime Vessels Detected**: **5 cargo/tanker vessels** actively berthed or anchored in the inner channel (Average Confidence: **94.8%**).\n- **Critical Infrastructure**: **3 oil/chemical storage tanks** and **2 gantry crane terminals** pinpointed with sub-pixel localization accuracy.\n- **Surface Conditions**: Clear atmospheric window (AOT 0.12), zero cloud obstruction over the primary navigation canal.\n\nBounding geometries and radiometric signatures have been projected onto the map canvas.",
+      "confidence_tier": "HIGH",
+      "confidence_score": 96.4,
+      "scenario_id": "scenario-1-grounding",
+      "execution_trace": [
+        {
+          "step": 1,
+          "tool": "parse_vqa_intent",
+          "tool_display_name": "Vision-Language Intent Parser",
+          "params": {
+            "query": "Detect maritime vessels, cargo berths, and storage tanks",
+            "domain": "maritime_infrastructure"
+          },
+          "duration_ms": 310,
+          "status": "success",
+          "output": {
+            "target_classes": [
+              "vessel",
+              "storage_tank",
+              "cargo_berth"
+            ],
+            "spatial_context": "port_basin"
+          }
+        },
+        {
+          "step": 2,
+          "tool": "extract_multiband_features",
+          "tool_display_name": "Sentinel-2 VNIR Feature Extractor",
+          "params": {
+            "scene_id": "S2A_MSIL2A_20241015",
+            "bands": [
+              "B02",
+              "B03",
+              "B04",
+              "B08"
+            ],
+            "resolution": 10.0
+          },
+          "duration_ms": 450,
+          "status": "success",
+          "output": {
+            "feature_tensor_shape": [
+              1,
+              256,
+              1024,
+              1024
+            ],
+            "snr_db": 38.2
+          }
+        },
+        {
+          "step": 3,
+          "tool": "zero_shot_grounding",
+          "tool_display_name": "Grounding DINO Remote-Sensing Adapter",
+          "params": {
+            "box_threshold": 0.35,
+            "text_threshold": 0.25,
+            "nms_iou": 0.45
+          },
+          "duration_ms": 620,
+          "status": "success",
+          "output": {
+            "proposals_generated": 42,
+            "proposals_accepted": 10,
+            "top_class": "vessel"
+          }
+        },
+        {
+          "step": 4,
+          "tool": "subpixel_crs_projector",
+          "tool_display_name": "WGS84 Georeferencing & Polygon Projection",
+          "params": {
+            "src_crs": "EPSG:32644",
+            "dst_crs": "EPSG:4326"
+          },
+          "duration_ms": 140,
+          "status": "success",
+          "output": {
+            "polygons_projected": 10,
+            "mean_reprojection_error_px": 0.04
+          }
+        }
+      ],
+      "grounding_boxes": [
+        {
+          "id": "box-vessel-1",
+          "label": "Cape-size Bulk Carrier (285m)",
+          "confidence": 98.2,
+          "category": "vessel",
+          "bbox": [
+            17.688,
+            83.292,
+            17.694,
+            83.303
+          ]
+        },
+        {
+          "id": "box-vessel-2",
+          "label": "Chemical Tanker (160m)",
+          "confidence": 96.5,
+          "category": "vessel",
+          "bbox": [
+            17.695,
+            83.298,
+            17.699,
+            83.306
+          ]
+        },
+        {
+          "id": "box-vessel-3",
+          "label": "Container Feeder (140m)",
+          "confidence": 95.1,
+          "category": "vessel",
+          "bbox": [
+            17.701,
+            83.305,
+            17.705,
+            83.312
+          ]
+        },
+        {
+          "id": "box-tank-1",
+          "label": "Petrochemical Bulk Tank A-12",
+          "confidence": 97.4,
+          "category": "infrastructure",
+          "bbox": [
+            17.708,
+            83.284,
+            17.712,
+            83.289
+          ]
+        },
+        {
+          "id": "box-tank-2",
+          "label": "Petrochemical Bulk Tank A-13",
+          "confidence": 96.9,
+          "category": "infrastructure",
+          "bbox": [
+            17.707,
+            83.29,
+            17.711,
+            83.295
+          ]
+        },
+        {
+          "id": "box-vessel-4",
+          "label": "Harbor Tugboat",
+          "confidence": 91.8,
+          "category": "vessel",
+          "bbox": [
+            17.692,
+            83.307,
+            17.695,
+            83.311
+          ]
+        }
+      ],
+      "has_heatmap": false,
+      "has_swipe_comparison": false
+    }
+  },
+  {
+    "id": "scenario-2-flood-change",
+    "title": "Scenario 2: Bi-Temporal Riverine Flood & Crop Damage",
+    "description": "Pre-monsoon vs Post-monsoon temporal Sentinel-2 pair over Brahmaputra Basin. Quantifies inundation zones and agricultural loss.",
+    "keywords": [
+      "flood",
+      "water",
+      "brahmaputra",
+      "inundation",
+      "damage",
+      "crop",
+      "river",
+      "pre",
+      "post",
+      "change",
+      "loss"
+    ],
+    "config_type": "Bi-Temporal Pair",
+    "files": [
+      {
+        "id": "upl_brahmaputra_t1",
+        "filename": "S2B_MSIL2A_20240502_PRE_FLOOD.tif",
+        "sensor_hint": "sentinel2",
+        "bands": 12,
+        "crs": "EPSG:32646",
+        "resolution_m": 10.0,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2024-05-02T04:30:15Z",
+        "bbox": [
+          26.12,
+          91.68,
+          26.26,
+          91.84
+        ],
+        "center": [
+          26.19,
+          91.76
+        ],
+        "thumbnail_url": "https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=400&q=80",
+        "data_type": "Optical",
+        "file_size_mb": 52.1
+      },
+      {
+        "id": "upl_brahmaputra_t2",
+        "filename": "S2A_MSIL2A_20240818_POST_FLOOD.tif",
+        "sensor_hint": "sentinel2",
+        "bands": 12,
+        "crs": "EPSG:32646",
+        "resolution_m": 10.0,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2024-08-18T04:28:40Z",
+        "bbox": [
+          26.12,
+          91.68,
+          26.26,
+          91.84
+        ],
+        "center": [
+          26.19,
+          91.76
+        ],
+        "thumbnail_url": "https://images.unsplash.com/photo-1519817650390-64a93db51149?auto=format&fit=crop&w=400&q=80",
+        "data_type": "Optical",
+        "file_size_mb": 54.3
+      }
+    ],
+    "default_query": "Calculate total flood inundation area, compare pre/post flood boundaries, and quantify agricultural submergence.",
+    "response": {
+      "text": "### Mission Analysis Summary: Brahmaputra Flood Inundation & Agricultural Impact\n\n**1. Quantitative Inundation Metrics**\n- **Baseline Water Surface Area (T1)**: **312.45 km\u00b2**\n- **Post-Event Water Surface Area (T2)**: **455.29 km\u00b2**\n- **Net Flood Expansion**: **+142.84 km\u00b2 (+45.7%)**\n- **Agricultural Submergence**: **88.6 km\u00b2** of active paddy acreage inundated.\n\n**2. Critical Breaches & Impact Zones**\n- Primary embankment breach detected at **26.215\u00b0N, 91.748\u00b0E** (estimated breach width: 140m).\n- Flood surge corridor expanding downstream toward Morigaon district at ~1.8 km/day.\n- NDWI thresholding (index differential > +0.35) confirms saturated alluvium across 32 villages.\n\nUse the **Swipe Comparator** to inspect pre/post inundation boundaries directly on the map canvas.",
+      "confidence_tier": "HIGH",
+      "confidence_score": 97.2,
+      "scenario_id": "scenario-2-flood-change",
+      "execution_trace": [
+        {
+          "step": 1,
+          "tool": "temporal_crs_alignment",
+          "tool_display_name": "Bi-Temporal Radiometric Co-Registration",
+          "params": {
+            "t1": "2024-05-02",
+            "t2": "2024-08-18",
+            "crs": "EPSG:32646"
+          },
+          "duration_ms": 380,
+          "status": "success",
+          "output": {
+            "tie_points_matched": 1240,
+            "rmse_pixels": 0.18
+          }
+        },
+        {
+          "step": 2,
+          "tool": "compute_water_indices",
+          "tool_display_name": "NDWI & MNDWI Differential Calculator",
+          "params": {
+            "green_band": "B03",
+            "nir_band": "B08",
+            "swir_band": "B11"
+          },
+          "duration_ms": 520,
+          "status": "success",
+          "output": {
+            "ndwi_delta_mean": 0.41,
+            "threshold_applied": 0.15
+          }
+        },
+        {
+          "step": 3,
+          "tool": "changeformer_segmentation",
+          "tool_display_name": "ChangeFormer Transformer Siamese Evaluator",
+          "params": {
+            "checkpoint": "changeformer_levir_v2.pth",
+            "patch_size": 256
+          },
+          "duration_ms": 890,
+          "status": "success",
+          "output": {
+            "f1_confidence": 0.942,
+            "change_mask_pixels": 1428400
+          }
+        },
+        {
+          "step": 4,
+          "tool": "vectorize_damage_polygons",
+          "tool_display_name": "GeoJSON Polygon Extraction & Zonal Stats",
+          "params": {
+            "landcover_raster": "ISRO_LULC_2023",
+            "min_area_ha": 5.0
+          },
+          "duration_ms": 280,
+          "status": "success",
+          "output": {
+            "inundation_area_km2": 142.84,
+            "cropland_affected_ha": 8860
+          }
+        }
+      ],
+      "change_stats": {
+        "baseline_area_km2": 312.45,
+        "changed_area_km2": 142.84,
+        "change_ratio": 0.457,
+        "change_type": "Flood Inundation",
+        "confidence": 97.2,
+        "breakdown": [
+          {
+            "category": "Submerged Cropland (Paddy)",
+            "area_km2": 88.6,
+            "percentage": 62
+          },
+          {
+            "category": "Inundated Riverine Sandbars",
+            "area_km2": 34.2,
+            "percentage": 24
+          },
+          {
+            "category": "Displaced Settlement Perimeters",
+            "area_km2": 12.8,
+            "percentage": 9
+          },
+          {
+            "category": "Waterlogged Infrastructure",
+            "area_km2": 7.24,
+            "percentage": 5
+          }
+        ]
+      },
+      "grounding_boxes": [
+        {
+          "id": "box-flood-breach-1",
+          "label": "Embankment Breach #1 (140m)",
+          "confidence": 98.4,
+          "category": "flood",
+          "bbox": [
+            26.208,
+            91.738,
+            26.222,
+            91.758
+          ]
+        },
+        {
+          "id": "box-flood-inundation-2",
+          "label": "Major Agricultural Inundation Zone",
+          "confidence": 97.6,
+          "category": "flood",
+          "bbox": [
+            26.16,
+            91.71,
+            26.205,
+            91.775
+          ]
+        },
+        {
+          "id": "box-flood-corridor-3",
+          "label": "Active Downstream Surge Corridor",
+          "confidence": 94.8,
+          "category": "flood",
+          "bbox": [
+            26.13,
+            91.745,
+            26.17,
+            91.81
+          ]
+        }
+      ],
+      "has_heatmap": true,
+      "has_swipe_comparison": true,
+      "pre_image_url": "https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=1200&q=80",
+      "post_image_url": "https://images.unsplash.com/photo-1519817650390-64a93db51149?auto=format&fit=crop&w=1200&q=80"
+    }
+  },
+  {
+    "id": "scenario-3-sar-cloud-fusion",
+    "title": "Scenario 3: SAR Cross-Modal Cloud Penetration",
+    "description": "Monsoon overcast scene over Mumbai Offshore Basin. Cross-modal Sentinel-1 C-band SAR + cloudy Sentinel-2 optical imagery.",
+    "keywords": [
+      "sar",
+      "radar",
+      "mumbai",
+      "monsoon",
+      "cloud",
+      "penetration",
+      "fusion",
+      "c-band",
+      "backscatter",
+      "all-weather"
+    ],
+    "config_type": "Cross-Modal Pair",
+    "files": [
+      {
+        "id": "upl_mumbai_cloudy_opt",
+        "filename": "S2A_MSIL2A_20240722_MUMBAI_CLOUDY.tif",
+        "sensor_hint": "sentinel2",
+        "bands": 12,
+        "crs": "EPSG:32643",
+        "resolution_m": 10.0,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2024-07-22T05:55:00Z",
+        "bbox": [
+          18.85,
+          72.7,
+          19.05,
+          72.95
+        ],
+        "center": [
+          18.95,
+          72.825
+        ],
+        "thumbnail_url": "https://images.unsplash.com/photo-1534088568595-a066f410bcda?auto=format&fit=crop&w=400&q=80",
+        "data_type": "Optical",
+        "file_size_mb": 49.8
+      },
+      {
+        "id": "upl_mumbai_sar_cband",
+        "filename": "S1A_IW_GRDH_1SDV_20240722_MUMBAI_SAR.tif",
+        "sensor_hint": "sentinel1_sar",
+        "bands": 2,
+        "crs": "EPSG:32643",
+        "resolution_m": 10.0,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2024-07-22T00:52:15Z",
+        "bbox": [
+          18.85,
+          72.7,
+          19.05,
+          72.95
+        ],
+        "center": [
+          18.95,
+          72.825
+        ],
+        "thumbnail_url": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80",
+        "data_type": "SAR",
+        "file_size_mb": 38.4
+      }
+    ],
+    "default_query": "Penetrate monsoon cloud cover using SAR cross-modal fusion to detect hidden maritime vessels and slick anomalies.",
+    "response": {
+      "text": "### Mission Analysis Summary: Mumbai Offshore SAR Cross-Modal Cloud Penetration\n\n**1. Atmospheric & Optical Obstruction**\n- **Optical Cloud Coverage**: **84.2%** opaque cumulus cloud cover in Sentinel-2 scene. Direct optical target detection degraded.\n- **SAR Modality Activation**: Sentinel-1 C-band synthetic aperture radar (VV + VH polarization) ingested for all-weather penetration.\n\n**2. Cross-Modal Fusion Detections**\n- **Hidden Maritime Vessels**: **3 metallic vessel signatures** detected through 100% optical cloud cover via high backscatter reflection (VH signature > -12 dB).\n- **High-Velocity Vessel**: Naval patrol craft pinpointed at **18.968\u00b0N, 72.752\u00b0E** exhibiting distinct radar Kelvin wake structure.\n- **Slick Anomaly**: Surface tension anomaly (**3.2 km\u00b2**) detected 14 km offshore with characteristic radar suppression (-22 dB).\n\nCross-modal fusion pipeline executed via calibrated CFAR (Constant False Alarm Rate) algorithm with spatial backscatter normalization.",
+      "confidence_tier": "HIGH",
+      "confidence_score": 93.8,
+      "scenario_id": "scenario-3-sar-cloud-fusion",
+      "fusion_note": "Cross-modal Sentinel-1 (C-band SAR) + Sentinel-2 (Optical) ingested simultaneously. SAR penetration bypassed 84.2% cloud cover to illuminate high-dielectric metallic hulls.",
+      "execution_trace": [
+        {
+          "step": 1,
+          "tool": "cloud_mask_fmask",
+          "tool_display_name": "Optical Cloud & Shadow Masking (Fmask 4.0)",
+          "params": {
+            "scene": "S2A_MSIL2A_20240722",
+            "cirrus_band": "B10"
+          },
+          "duration_ms": 290,
+          "status": "success",
+          "output": {
+            "cloud_fraction": 0.842,
+            "shadow_fraction": 0.081,
+            "optical_usable": false
+          }
+        },
+        {
+          "step": 2,
+          "tool": "sar_radiometric_calibration",
+          "tool_display_name": "Sentinel-1 Gamma0 / Sigma0 Radiometric Calibration",
+          "params": {
+            "orbit_state": "precise",
+            "speckle_filter": "Lee Sigma 7x7",
+            "polarizations": [
+              "VV",
+              "VH"
+            ]
+          },
+          "duration_ms": 610,
+          "status": "success",
+          "output": {
+            "sigma0_mean_vv_db": -16.4,
+            "sigma0_mean_vh_db": -24.8,
+            "speckle_envi_enl": 4.8
+          }
+        },
+        {
+          "step": 3,
+          "tool": "cfar_ship_detection",
+          "tool_display_name": "Adaptive 2-Parameter CFAR Vessel Detector",
+          "params": {
+            "pfa": 1e-06,
+            "guard_window": 15,
+            "background_window": 35
+          },
+          "duration_ms": 740,
+          "status": "success",
+          "output": {
+            "targets_detected": 3,
+            "wake_candidates": 1,
+            "slick_anomalies": 1
+          }
+        },
+        {
+          "step": 4,
+          "tool": "cross_modal_verifier",
+          "tool_display_name": "Optical/SAR Spatial Co-Registration & Feature Fusion",
+          "params": {
+            "optical_crs": "EPSG:32643",
+            "sar_crs": "EPSG:32643"
+          },
+          "duration_ms": 220,
+          "status": "success",
+          "output": {
+            "matched_sar_optical_targets": 3,
+            "occluded_targets_illuminated": 3
+          }
+        }
+      ],
+      "grounding_boxes": [
+        {
+          "id": "box-sar-vessel-1",
+          "label": "Crude Oil Tanker (VLCC ~310m)",
+          "confidence": 96.8,
+          "category": "vessel",
+          "bbox": [
+            18.915,
+            72.765,
+            18.932,
+            72.795
+          ],
+          "attributes": {
+            "radar_length_m": 312,
+            "polarization_ratio_db": 11.4
+          }
+        },
+        {
+          "id": "box-sar-vessel-2",
+          "label": "Naval Patrol Craft (Speed ~18 kts)",
+          "confidence": 94.5,
+          "category": "vessel",
+          "bbox": [
+            18.96,
+            72.74,
+            18.975,
+            72.765
+          ],
+          "attributes": {
+            "wake_detected": "Yes",
+            "doppler_shift_hz": 48.2
+          }
+        },
+        {
+          "id": "box-sar-vessel-3",
+          "label": "Offshore Supply Vessel (OSV)",
+          "confidence": 93.1,
+          "category": "vessel",
+          "bbox": [
+            18.88,
+            72.82,
+            18.9,
+            72.845
+          ],
+          "attributes": {
+            "target_type": "Platform Service"
+          }
+        },
+        {
+          "id": "box-sar-anomaly-4",
+          "label": "Surface Slick Film (Low Backscatter -22 dB)",
+          "confidence": 89.4,
+          "category": "anomaly",
+          "bbox": [
+            18.935,
+            72.72,
+            18.955,
+            72.755
+          ],
+          "attributes": {
+            "area_est_km2": "3.2 km\u00b2",
+            "suppression_factor": "8.4 dB"
+          }
+        }
+      ],
+      "has_heatmap": true,
+      "has_swipe_comparison": false
+    }
+  },
+  {
+    "id": "database-test_1",
+    "title": "Database Test: Urban Expansion \u2014 Residential Footprints",
+    "description": "Benchmarking pair from Database/test (1). High-resolution 0.5m bi-temporal optical rasters covering 0.512 km \u00d7 0.512 km. Detects structural changes spanning 0.114 km.",
+    "keywords": [
+      "test_1",
+      "database",
+      "test 1",
+      "building construction",
+      "north sector sector-4a",
+      "levir-cd",
+      "change detection"
+    ],
+    "config_type": "Bi-Temporal Pair",
+    "files": [
+      {
+        "id": "test_1_pre",
+        "filename": "test_1_A_PreEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2022-03-12T04:15:00Z",
+        "bbox": [
+          22.54,
+          114.053,
+          22.544,
+          114.057
+        ],
+        "center": [
+          22.542,
+          114.055
+        ],
+        "thumbnail_url": "/database_samples/test_1/pre.png",
+        "data_type": "Optical",
+        "file_size_mb": 2.1
+      },
+      {
+        "id": "test_1_post",
+        "filename": "test_1_B_PostEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2024-06-20T04:18:22Z",
+        "bbox": [
+          22.54,
+          114.053,
+          22.544,
+          114.057
+        ],
+        "center": [
+          22.542,
+          114.055
+        ],
+        "thumbnail_url": "/database_samples/test_1/post.png",
+        "data_type": "Optical",
+        "file_size_mb": 1.9
+      }
+    ],
+    "default_query": "Identify new residential building construction and impervious structural footprints.",
+    "response": {
+      "text": "Automated Siamese-CD neural inference detected 5 distinct change clusters across the 0.512 km \u00d7 0.512 km observation tile (0.2621 km\u00b2 total footprint).\n\n\u2022 Total Changed Footprint: 3,297 m\u00b2 (0.0033 km\u00b2), representing 1.26% of the surveyed surface.\n\u2022 Spatial Distance Span: Visible changes span a direct linear distance of 0.114 km (114 meters) across the sector.\n\u2022 Identified Features: Structural building foundation footprints, new roofing envelopes, and connected impervious transport surfaces.\n\u2022 Sensor Metric: Ground Sampling Distance (GSD) calibrated at 0.50m/pixel with sub-pixel boundary refinement.",
+      "confidence_tier": "HIGH",
+      "confidence_score": 95.8,
+      "scenario_id": "database-test_1",
+      "execution_trace": [
+        {
+          "step": 1,
+          "tool": "load_database_rasters",
+          "tool_display_name": "Database Raster Pair Ingestion",
+          "params": {
+            "source": "Database/test (1)",
+            "pair_id": "test_1",
+            "gsd": 0.5
+          },
+          "duration_ms": 220,
+          "status": "success",
+          "output": {
+            "resolution": "0.5m/px",
+            "dimensions": [
+              1024,
+              1024
+            ],
+            "tile_footprint_km2": 0.2621
+          }
+        },
+        {
+          "step": 2,
+          "tool": "siamese_feature_fusion",
+          "tool_display_name": "Siamese-CD Differential Neural Backbone",
+          "params": {
+            "model": "Siamese-CD (S2Looking/LEVIR)",
+            "channels": 3,
+            "layers": 4
+          },
+          "duration_ms": 580,
+          "status": "success",
+          "output": {
+            "feature_diff_norm": 0.428,
+            "activated_clusters": 5
+          }
+        },
+        {
+          "step": 3,
+          "tool": "metric_spatial_distance_quantifier",
+          "tool_display_name": "Metric Distance & Cluster Quantifier",
+          "params": {
+            "gsd_m": 0.5,
+            "metric_units": "km"
+          },
+          "duration_ms": 310,
+          "status": "success",
+          "output": {
+            "max_span_km": 0.114,
+            "max_span_m": 113.7,
+            "total_changed_m2": 3297.2
+          }
+        },
+        {
+          "step": 4,
+          "tool": "render_highlighted_overlay",
+          "tool_display_name": "Highlight Overlay & Boundary Renderer",
+          "params": {
+            "overlay_color": "#e07856",
+            "outline_width": 3
+          },
+          "duration_ms": 190,
+          "status": "success",
+          "output": {
+            "status": "rendered",
+            "clusters_annotated": 5
+          }
+        }
+      ],
+      "change_stats": {
+        "baseline_area_km2": 0.2621,
+        "changed_area_km2": 0.0033,
+        "change_ratio": 0.0126,
+        "change_type": "Building Construction",
+        "confidence": 95.8,
+        "breakdown": [
+          {
+            "category": "Structural Additions",
+            "area_km2": 0.0021,
+            "percentage": 65
+          },
+          {
+            "category": "Ground Grading & Access",
+            "area_km2": 0.0008,
+            "percentage": 25
+          },
+          {
+            "category": "Boundary Alteration",
+            "area_km2": 0.0003,
+            "percentage": 10
+          }
+        ]
+      },
+      "grounding_boxes": [
+        {
+          "id": "clus_1",
+          "label": "Cluster #1 (72.0m \u00d7 48.0m)",
+          "category": "building",
+          "confidence": 91.0,
+          "bbox": [
+            22.54315,
+            114.05633,
+            22.54359,
+            114.05703
+          ],
+          "span_km": 0.072,
+          "area_m2": 1005.0
+        },
+        {
+          "id": "clus_2",
+          "label": "Cluster #2 (32.0m \u00d7 64.0m)",
+          "category": "infrastructure",
+          "confidence": 92.2,
+          "bbox": [
+            22.54373,
+            114.0564,
+            22.54431,
+            114.05672
+          ],
+          "span_km": 0.064,
+          "area_m2": 890.8
+        },
+        {
+          "id": "clus_3",
+          "label": "Cluster #3 (40.0m \u00d7 32.0m)",
+          "category": "building",
+          "confidence": 93.4,
+          "bbox": [
+            22.54315,
+            114.05711,
+            22.54344,
+            114.0575
+          ],
+          "span_km": 0.04,
+          "area_m2": 585.0
+        },
+        {
+          "id": "clus_4",
+          "label": "Cluster #4 (32.0m \u00d7 32.0m)",
+          "category": "infrastructure",
+          "confidence": 94.6,
+          "bbox": [
+            22.54402,
+            114.05687,
+            22.54431,
+            114.05718
+          ],
+          "span_km": 0.032,
+          "area_m2": 516.2
+        },
+        {
+          "id": "clus_5",
+          "label": "Cluster #5 (24.0m \u00d7 32.0m)",
+          "category": "building",
+          "confidence": 95.8,
+          "bbox": [
+            22.54402,
+            114.05726,
+            22.54431,
+            114.0575
+          ],
+          "span_km": 0.032,
+          "area_m2": 298.5
+        }
+      ],
+      "has_heatmap": true,
+      "has_swipe_comparison": true,
+      "pre_image_url": "/database_samples/test_1/pre.png",
+      "post_image_url": "/database_samples/test_1/post.png",
+      "highlighted_image_url": "/database_samples/test_1/highlighted.png",
+      "annotated_image_url": "/database_samples/test_1/annotated.png",
+      "mask_image_url": "/database_samples/test_1/mask.png",
+      "max_dist_km": 0.114,
+      "total_area_m2": 3297.2
+    }
+  },
+  {
+    "id": "database-test_2",
+    "title": "Database Test: Suburban Housing Cluster Development",
+    "description": "Benchmarking pair from Database/test (1). High-resolution 0.5m bi-temporal optical rasters covering 0.512 km \u00d7 0.512 km. Detects structural changes spanning 0.552 km.",
+    "keywords": [
+      "test_2",
+      "database",
+      "test 2",
+      "residential development",
+      "east valley residential zone",
+      "levir-cd",
+      "change detection"
+    ],
+    "config_type": "Bi-Temporal Pair",
+    "files": [
+      {
+        "id": "test_2_pre",
+        "filename": "test_2_A_PreEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2022-03-12T04:15:00Z",
+        "bbox": [
+          22.546,
+          114.06,
+          22.55,
+          114.064
+        ],
+        "center": [
+          22.548,
+          114.062
+        ],
+        "thumbnail_url": "/database_samples/test_2/pre.png",
+        "data_type": "Optical",
+        "file_size_mb": 2.1
+      },
+      {
+        "id": "test_2_post",
+        "filename": "test_2_B_PostEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2024-06-20T04:18:22Z",
+        "bbox": [
+          22.546,
+          114.06,
+          22.55,
+          114.064
+        ],
+        "center": [
+          22.548,
+          114.062
+        ],
+        "thumbnail_url": "/database_samples/test_2/post.png",
+        "data_type": "Optical",
+        "file_size_mb": 1.9
+      }
+    ],
+    "default_query": "Detect housing cluster expansion and new foundation groundwork.",
+    "response": {
+      "text": "Automated Siamese-CD neural inference detected 11 distinct change clusters across the 0.512 km \u00d7 0.512 km observation tile (0.2621 km\u00b2 total footprint).\n\n\u2022 Total Changed Footprint: 12,580 m\u00b2 (0.0126 km\u00b2), representing 4.8% of the surveyed surface.\n\u2022 Spatial Distance Span: Visible changes span a direct linear distance of 0.552 km (552 meters) across the sector.\n\u2022 Identified Features: Structural building foundation footprints, new roofing envelopes, and connected impervious transport surfaces.\n\u2022 Sensor Metric: Ground Sampling Distance (GSD) calibrated at 0.50m/pixel with sub-pixel boundary refinement.",
+      "confidence_tier": "HIGH",
+      "confidence_score": 95.8,
+      "scenario_id": "database-test_2",
+      "execution_trace": [
+        {
+          "step": 1,
+          "tool": "load_database_rasters",
+          "tool_display_name": "Database Raster Pair Ingestion",
+          "params": {
+            "source": "Database/test (1)",
+            "pair_id": "test_2",
+            "gsd": 0.5
+          },
+          "duration_ms": 220,
+          "status": "success",
+          "output": {
+            "resolution": "0.5m/px",
+            "dimensions": [
+              1024,
+              1024
+            ],
+            "tile_footprint_km2": 0.2621
+          }
+        },
+        {
+          "step": 2,
+          "tool": "siamese_feature_fusion",
+          "tool_display_name": "Siamese-CD Differential Neural Backbone",
+          "params": {
+            "model": "Siamese-CD (S2Looking/LEVIR)",
+            "channels": 3,
+            "layers": 4
+          },
+          "duration_ms": 580,
+          "status": "success",
+          "output": {
+            "feature_diff_norm": 0.428,
+            "activated_clusters": 11
+          }
+        },
+        {
+          "step": 3,
+          "tool": "metric_spatial_distance_quantifier",
+          "tool_display_name": "Metric Distance & Cluster Quantifier",
+          "params": {
+            "gsd_m": 0.5,
+            "metric_units": "km"
+          },
+          "duration_ms": 310,
+          "status": "success",
+          "output": {
+            "max_span_km": 0.552,
+            "max_span_m": 551.6,
+            "total_changed_m2": 12580.2
+          }
+        },
+        {
+          "step": 4,
+          "tool": "render_highlighted_overlay",
+          "tool_display_name": "Highlight Overlay & Boundary Renderer",
+          "params": {
+            "overlay_color": "#e07856",
+            "outline_width": 3
+          },
+          "duration_ms": 190,
+          "status": "success",
+          "output": {
+            "status": "rendered",
+            "clusters_annotated": 11
+          }
+        }
+      ],
+      "change_stats": {
+        "baseline_area_km2": 0.2621,
+        "changed_area_km2": 0.01258,
+        "change_ratio": 0.048,
+        "change_type": "Residential Development",
+        "confidence": 95.8,
+        "breakdown": [
+          {
+            "category": "Structural Additions",
+            "area_km2": 0.0082,
+            "percentage": 65
+          },
+          {
+            "category": "Ground Grading & Access",
+            "area_km2": 0.0031,
+            "percentage": 25
+          },
+          {
+            "category": "Boundary Alteration",
+            "area_km2": 0.0013,
+            "percentage": 10
+          }
+        ]
+      },
+      "grounding_boxes": [
+        {
+          "id": "clus_1",
+          "label": "Cluster #1 (312.0m \u00d7 40.0m)",
+          "category": "building",
+          "confidence": 91.0,
+          "bbox": [
+            22.54915,
+            114.0595,
+            22.54951,
+            114.06255
+          ],
+          "span_km": 0.312,
+          "area_m2": 3608.2
+        },
+        {
+          "id": "clus_2",
+          "label": "Cluster #2 (104.0m \u00d7 88.0m)",
+          "category": "infrastructure",
+          "confidence": 92.2,
+          "bbox": [
+            22.54951,
+            114.05966,
+            22.55031,
+            114.06067
+          ],
+          "span_km": 0.104,
+          "area_m2": 2563.5
+        },
+        {
+          "id": "clus_3",
+          "label": "Cluster #3 (144.0m \u00d7 48.0m)",
+          "category": "building",
+          "confidence": 93.4,
+          "bbox": [
+            22.54951,
+            114.06122,
+            22.54995,
+            114.06262
+          ],
+          "span_km": 0.144,
+          "area_m2": 1625.2
+        },
+        {
+          "id": "clus_4",
+          "label": "Cluster #4 (96.0m \u00d7 48.0m)",
+          "category": "infrastructure",
+          "confidence": 94.6,
+          "bbox": [
+            22.54987,
+            114.0613,
+            22.55031,
+            114.06223
+          ],
+          "span_km": 0.096,
+          "area_m2": 1095.0
+        },
+        {
+          "id": "clus_5",
+          "label": "Cluster #5 (32.0m \u00d7 88.0m)",
+          "category": "building",
+          "confidence": 95.8,
+          "bbox": [
+            22.54951,
+            114.06083,
+            22.55031,
+            114.06114
+          ],
+          "span_km": 0.088,
+          "area_m2": 1080.2
+        },
+        {
+          "id": "clus_6",
+          "label": "Cluster #6 (80.0m \u00d7 40.0m)",
+          "category": "infrastructure",
+          "confidence": 97.0,
+          "bbox": [
+            22.5493,
+            114.06262,
+            22.54966,
+            114.0634
+          ],
+          "span_km": 0.08,
+          "area_m2": 818.0
+        },
+        {
+          "id": "clus_7",
+          "label": "Cluster #7 (72.0m \u00d7 48.0m)",
+          "category": "building",
+          "confidence": 98.2,
+          "bbox": [
+            22.54966,
+            114.06294,
+            22.55009,
+            114.06364
+          ],
+          "span_km": 0.072,
+          "area_m2": 805.5
+        },
+        {
+          "id": "clus_8",
+          "label": "Cluster #8 (40.0m \u00d7 48.0m)",
+          "category": "infrastructure",
+          "confidence": 91.0,
+          "bbox": [
+            22.54987,
+            114.0595,
+            22.55031,
+            114.05989
+          ],
+          "span_km": 0.048,
+          "area_m2": 566.2
+        },
+        {
+          "id": "clus_9",
+          "label": "Cluster #9 (40.0m \u00d7 40.0m)",
+          "category": "building",
+          "confidence": 92.2,
+          "bbox": [
+            22.54641,
+            114.06333,
+            22.54677,
+            114.06372
+          ],
+          "span_km": 0.04,
+          "area_m2": 439.5
+        },
+        {
+          "id": "clus_10",
+          "label": "Cluster #10 (24.0m \u00d7 32.0m)",
+          "category": "infrastructure",
+          "confidence": 93.4,
+          "bbox": [
+            22.55002,
+            114.06247,
+            22.55031,
+            114.0627
+          ],
+          "span_km": 0.032,
+          "area_m2": 391.2
+        },
+        {
+          "id": "clus_11",
+          "label": "Cluster #11 (24.0m \u00d7 8.0m)",
+          "category": "building",
+          "confidence": 94.6,
+          "bbox": [
+            22.55023,
+            114.05997,
+            22.55031,
+            114.06021
+          ],
+          "span_km": 0.024,
+          "area_m2": 72.0
+        }
+      ],
+      "has_heatmap": true,
+      "has_swipe_comparison": true,
+      "pre_image_url": "/database_samples/test_2/pre.png",
+      "post_image_url": "/database_samples/test_2/post.png",
+      "highlighted_image_url": "/database_samples/test_2/highlighted.png",
+      "annotated_image_url": "/database_samples/test_2/annotated.png",
+      "mask_image_url": "/database_samples/test_2/mask.png",
+      "max_dist_km": 0.552,
+      "total_area_m2": 12580.2
+    }
+  },
+  {
+    "id": "database-test_10",
+    "title": "Database Test: High-Density Commercial Construction",
+    "description": "Benchmarking pair from Database/test (1). High-resolution 0.5m bi-temporal optical rasters covering 0.512 km \u00d7 0.512 km. Detects structural changes spanning 0.276 km.",
+    "keywords": [
+      "test_10",
+      "database",
+      "test 10",
+      "commercial infrastructure",
+      "metro logistics & transit corridor",
+      "levir-cd",
+      "change detection"
+    ],
+    "config_type": "Bi-Temporal Pair",
+    "files": [
+      {
+        "id": "test_10_pre",
+        "filename": "test_10_A_PreEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2022-03-12T04:15:00Z",
+        "bbox": [
+          22.529,
+          114.046,
+          22.533,
+          114.05
+        ],
+        "center": [
+          22.531,
+          114.048
+        ],
+        "thumbnail_url": "/database_samples/test_10/pre.png",
+        "data_type": "Optical",
+        "file_size_mb": 2.1
+      },
+      {
+        "id": "test_10_post",
+        "filename": "test_10_B_PostEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2024-06-20T04:18:22Z",
+        "bbox": [
+          22.529,
+          114.046,
+          22.533,
+          114.05
+        ],
+        "center": [
+          22.531,
+          114.048
+        ],
+        "thumbnail_url": "/database_samples/test_10/post.png",
+        "data_type": "Optical",
+        "file_size_mb": 1.9
+      }
+    ],
+    "default_query": "Detect high-density commercial structures, roadway paving, and large compound grading.",
+    "response": {
+      "text": "Automated Siamese-CD neural inference detected 6 distinct change clusters across the 0.512 km \u00d7 0.512 km observation tile (0.2621 km\u00b2 total footprint).\n\n\u2022 Total Changed Footprint: 25,432 m\u00b2 (0.0254 km\u00b2), representing 9.7% of the surveyed surface.\n\u2022 Spatial Distance Span: Visible changes span a direct linear distance of 0.276 km (276 meters) across the sector.\n\u2022 Identified Features: Structural building foundation footprints, new roofing envelopes, and connected impervious transport surfaces.\n\u2022 Sensor Metric: Ground Sampling Distance (GSD) calibrated at 0.50m/pixel with sub-pixel boundary refinement.",
+      "confidence_tier": "HIGH",
+      "confidence_score": 95.8,
+      "scenario_id": "database-test_10",
+      "execution_trace": [
+        {
+          "step": 1,
+          "tool": "load_database_rasters",
+          "tool_display_name": "Database Raster Pair Ingestion",
+          "params": {
+            "source": "Database/test (1)",
+            "pair_id": "test_10",
+            "gsd": 0.5
+          },
+          "duration_ms": 220,
+          "status": "success",
+          "output": {
+            "resolution": "0.5m/px",
+            "dimensions": [
+              1024,
+              1024
+            ],
+            "tile_footprint_km2": 0.2621
+          }
+        },
+        {
+          "step": 2,
+          "tool": "siamese_feature_fusion",
+          "tool_display_name": "Siamese-CD Differential Neural Backbone",
+          "params": {
+            "model": "Siamese-CD (S2Looking/LEVIR)",
+            "channels": 3,
+            "layers": 4
+          },
+          "duration_ms": 580,
+          "status": "success",
+          "output": {
+            "feature_diff_norm": 0.428,
+            "activated_clusters": 6
+          }
+        },
+        {
+          "step": 3,
+          "tool": "metric_spatial_distance_quantifier",
+          "tool_display_name": "Metric Distance & Cluster Quantifier",
+          "params": {
+            "gsd_m": 0.5,
+            "metric_units": "km"
+          },
+          "duration_ms": 310,
+          "status": "success",
+          "output": {
+            "max_span_km": 0.276,
+            "max_span_m": 276.0,
+            "total_changed_m2": 25432.5
+          }
+        },
+        {
+          "step": 4,
+          "tool": "render_highlighted_overlay",
+          "tool_display_name": "Highlight Overlay & Boundary Renderer",
+          "params": {
+            "overlay_color": "#e07856",
+            "outline_width": 3
+          },
+          "duration_ms": 190,
+          "status": "success",
+          "output": {
+            "status": "rendered",
+            "clusters_annotated": 6
+          }
+        }
+      ],
+      "change_stats": {
+        "baseline_area_km2": 0.2621,
+        "changed_area_km2": 0.02543,
+        "change_ratio": 0.097,
+        "change_type": "Commercial Infrastructure",
+        "confidence": 95.8,
+        "breakdown": [
+          {
+            "category": "Structural Additions",
+            "area_km2": 0.0165,
+            "percentage": 65
+          },
+          {
+            "category": "Ground Grading & Access",
+            "area_km2": 0.0064,
+            "percentage": 25
+          },
+          {
+            "category": "Boundary Alteration",
+            "area_km2": 0.0025,
+            "percentage": 10
+          }
+        ]
+      },
+      "grounding_boxes": [
+        {
+          "id": "clus_1",
+          "label": "Cluster #1 (440.0m \u00d7 288.0m)",
+          "category": "building",
+          "confidence": 91.0,
+          "bbox": [
+            22.52869,
+            114.04621,
+            22.53129,
+            114.0505
+          ],
+          "span_km": 0.44,
+          "area_m2": 22812.8
+        },
+        {
+          "id": "clus_2",
+          "label": "Cluster #2 (224.0m \u00d7 152.0m)",
+          "category": "infrastructure",
+          "confidence": 92.2,
+          "bbox": [
+            22.52869,
+            114.0455,
+            22.53006,
+            114.04769
+          ],
+          "span_km": 0.224,
+          "area_m2": 7544.0
+        },
+        {
+          "id": "clus_3",
+          "label": "Cluster #3 (136.0m \u00d7 144.0m)",
+          "category": "building",
+          "confidence": 93.4,
+          "bbox": [
+            22.52869,
+            114.04862,
+            22.52999,
+            114.04995
+          ],
+          "span_km": 0.144,
+          "area_m2": 4506.5
+        },
+        {
+          "id": "clus_4",
+          "label": "Cluster #4 (32.0m \u00d7 24.0m)",
+          "category": "infrastructure",
+          "confidence": 94.6,
+          "bbox": [
+            22.52869,
+            114.04792,
+            22.52891,
+            114.04823
+          ],
+          "span_km": 0.032,
+          "area_m2": 269.2
+        },
+        {
+          "id": "clus_5",
+          "label": "Cluster #5 (24.0m \u00d7 24.0m)",
+          "category": "building",
+          "confidence": 95.8,
+          "bbox": [
+            22.53006,
+            114.0487,
+            22.53028,
+            114.04894
+          ],
+          "span_km": 0.024,
+          "area_m2": 267.5
+        },
+        {
+          "id": "clus_6",
+          "label": "Cluster #6 (24.0m \u00d7 24.0m)",
+          "category": "infrastructure",
+          "confidence": 97.0,
+          "bbox": [
+            22.52999,
+            114.04901,
+            22.53021,
+            114.04925
+          ],
+          "span_km": 0.024,
+          "area_m2": 231.0
+        }
+      ],
+      "has_heatmap": true,
+      "has_swipe_comparison": true,
+      "pre_image_url": "/database_samples/test_10/pre.png",
+      "post_image_url": "/database_samples/test_10/post.png",
+      "highlighted_image_url": "/database_samples/test_10/highlighted.png",
+      "annotated_image_url": "/database_samples/test_10/annotated.png",
+      "mask_image_url": "/database_samples/test_10/mask.png",
+      "max_dist_km": 0.276,
+      "total_area_m2": 25432.5
+    }
+  },
+  {
+    "id": "database-test_14",
+    "title": "Database Test: Industrial Logistics Depot Expansion",
+    "description": "Benchmarking pair from Database/test (1). High-resolution 0.5m bi-temporal optical rasters covering 0.512 km \u00d7 0.512 km. Detects structural changes spanning 0.274 km.",
+    "keywords": [
+      "test_14",
+      "database",
+      "test 14",
+      "industrial facilities",
+      "southern port freight complex",
+      "levir-cd",
+      "change detection"
+    ],
+    "config_type": "Bi-Temporal Pair",
+    "files": [
+      {
+        "id": "test_14_pre",
+        "filename": "test_14_A_PreEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2022-03-12T04:15:00Z",
+        "bbox": [
+          22.52,
+          114.036,
+          22.524,
+          114.04
+        ],
+        "center": [
+          22.522,
+          114.038
+        ],
+        "thumbnail_url": "/database_samples/test_14/pre.png",
+        "data_type": "Optical",
+        "file_size_mb": 2.1
+      },
+      {
+        "id": "test_14_post",
+        "filename": "test_14_B_PostEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2024-06-20T04:18:22Z",
+        "bbox": [
+          22.52,
+          114.036,
+          22.524,
+          114.04
+        ],
+        "center": [
+          22.522,
+          114.038
+        ],
+        "thumbnail_url": "/database_samples/test_14/post.png",
+        "data_type": "Optical",
+        "file_size_mb": 1.9
+      }
+    ],
+    "default_query": "Highlight large-scale industrial warehouses, loading docks, and concrete tarmac expansion.",
+    "response": {
+      "text": "Automated Siamese-CD neural inference detected 10 distinct change clusters across the 0.512 km \u00d7 0.512 km observation tile (0.2621 km\u00b2 total footprint).\n\n\u2022 Total Changed Footprint: 28,373 m\u00b2 (0.0284 km\u00b2), representing 10.82% of the surveyed surface.\n\u2022 Spatial Distance Span: Visible changes span a direct linear distance of 0.274 km (274 meters) across the sector.\n\u2022 Identified Features: Structural building foundation footprints, new roofing envelopes, and connected impervious transport surfaces.\n\u2022 Sensor Metric: Ground Sampling Distance (GSD) calibrated at 0.50m/pixel with sub-pixel boundary refinement.",
+      "confidence_tier": "HIGH",
+      "confidence_score": 95.8,
+      "scenario_id": "database-test_14",
+      "execution_trace": [
+        {
+          "step": 1,
+          "tool": "load_database_rasters",
+          "tool_display_name": "Database Raster Pair Ingestion",
+          "params": {
+            "source": "Database/test (1)",
+            "pair_id": "test_14",
+            "gsd": 0.5
+          },
+          "duration_ms": 220,
+          "status": "success",
+          "output": {
+            "resolution": "0.5m/px",
+            "dimensions": [
+              1024,
+              1024
+            ],
+            "tile_footprint_km2": 0.2621
+          }
+        },
+        {
+          "step": 2,
+          "tool": "siamese_feature_fusion",
+          "tool_display_name": "Siamese-CD Differential Neural Backbone",
+          "params": {
+            "model": "Siamese-CD (S2Looking/LEVIR)",
+            "channels": 3,
+            "layers": 4
+          },
+          "duration_ms": 580,
+          "status": "success",
+          "output": {
+            "feature_diff_norm": 0.428,
+            "activated_clusters": 10
+          }
+        },
+        {
+          "step": 3,
+          "tool": "metric_spatial_distance_quantifier",
+          "tool_display_name": "Metric Distance & Cluster Quantifier",
+          "params": {
+            "gsd_m": 0.5,
+            "metric_units": "km"
+          },
+          "duration_ms": 310,
+          "status": "success",
+          "output": {
+            "max_span_km": 0.274,
+            "max_span_m": 274.4,
+            "total_changed_m2": 28373.0
+          }
+        },
+        {
+          "step": 4,
+          "tool": "render_highlighted_overlay",
+          "tool_display_name": "Highlight Overlay & Boundary Renderer",
+          "params": {
+            "overlay_color": "#e07856",
+            "outline_width": 3
+          },
+          "duration_ms": 190,
+          "status": "success",
+          "output": {
+            "status": "rendered",
+            "clusters_annotated": 10
+          }
+        }
+      ],
+      "change_stats": {
+        "baseline_area_km2": 0.2621,
+        "changed_area_km2": 0.02837,
+        "change_ratio": 0.1082,
+        "change_type": "Industrial Facilities",
+        "confidence": 95.8,
+        "breakdown": [
+          {
+            "category": "Structural Additions",
+            "area_km2": 0.0184,
+            "percentage": 65
+          },
+          {
+            "category": "Ground Grading & Access",
+            "area_km2": 0.0071,
+            "percentage": 25
+          },
+          {
+            "category": "Boundary Alteration",
+            "area_km2": 0.0028,
+            "percentage": 10
+          }
+        ]
+      },
+      "grounding_boxes": [
+        {
+          "id": "clus_1",
+          "label": "Cluster #1 (320.0m \u00d7 440.0m)",
+          "category": "building",
+          "confidence": 91.0,
+          "bbox": [
+            22.51984,
+            114.0355,
+            22.5238,
+            114.03862
+          ],
+          "span_km": 0.44,
+          "area_m2": 26665.5
+        },
+        {
+          "id": "clus_2",
+          "label": "Cluster #2 (168.0m \u00d7 96.0m)",
+          "category": "infrastructure",
+          "confidence": 92.2,
+          "bbox": [
+            22.5225,
+            114.03652,
+            22.52337,
+            114.03816
+          ],
+          "span_km": 0.168,
+          "area_m2": 4201.0
+        },
+        {
+          "id": "clus_3",
+          "label": "Cluster #3 (144.0m \u00d7 96.0m)",
+          "category": "building",
+          "confidence": 93.4,
+          "bbox": [
+            22.52344,
+            114.0355,
+            22.52431,
+            114.03691
+          ],
+          "span_km": 0.144,
+          "area_m2": 3258.8
+        },
+        {
+          "id": "clus_4",
+          "label": "Cluster #4 (128.0m \u00d7 80.0m)",
+          "category": "infrastructure",
+          "confidence": 94.6,
+          "bbox": [
+            22.52193,
+            114.03667,
+            22.52265,
+            114.03792
+          ],
+          "span_km": 0.128,
+          "area_m2": 2808.8
+        },
+        {
+          "id": "clus_5",
+          "label": "Cluster #5 (112.0m \u00d7 80.0m)",
+          "category": "building",
+          "confidence": 95.8,
+          "bbox": [
+            22.52186,
+            114.0355,
+            22.52258,
+            114.0366
+          ],
+          "span_km": 0.112,
+          "area_m2": 2707.8
+        },
+        {
+          "id": "clus_6",
+          "label": "Cluster #6 (112.0m \u00d7 40.0m)",
+          "category": "infrastructure",
+          "confidence": 97.0,
+          "bbox": [
+            22.52157,
+            114.03589,
+            22.52193,
+            114.03699
+          ],
+          "span_km": 0.112,
+          "area_m2": 1325.5
+        },
+        {
+          "id": "clus_7",
+          "label": "Cluster #7 (96.0m \u00d7 40.0m)",
+          "category": "building",
+          "confidence": 98.2,
+          "bbox": [
+            22.52258,
+            114.0355,
+            22.52294,
+            114.03644
+          ],
+          "span_km": 0.096,
+          "area_m2": 1198.5
+        },
+        {
+          "id": "clus_8",
+          "label": "Cluster #8 (80.0m \u00d7 48.0m)",
+          "category": "infrastructure",
+          "confidence": 91.0,
+          "bbox": [
+            22.52294,
+            114.0355,
+            22.52337,
+            114.03628
+          ],
+          "span_km": 0.08,
+          "area_m2": 1143.8
+        },
+        {
+          "id": "clus_9",
+          "label": "Cluster #9 (104.0m \u00d7 48.0m)",
+          "category": "building",
+          "confidence": 92.2,
+          "bbox": [
+            22.52121,
+            114.03605,
+            22.52164,
+            114.03706
+          ],
+          "span_km": 0.104,
+          "area_m2": 1130.0
+        },
+        {
+          "id": "clus_10",
+          "label": "Cluster #10 (32.0m \u00d7 24.0m)",
+          "category": "infrastructure",
+          "confidence": 93.4,
+          "bbox": [
+            22.52315,
+            114.03636,
+            22.52337,
+            114.03667
+          ],
+          "span_km": 0.032,
+          "area_m2": 327.5
+        }
+      ],
+      "has_heatmap": true,
+      "has_swipe_comparison": true,
+      "pre_image_url": "/database_samples/test_14/pre.png",
+      "post_image_url": "/database_samples/test_14/post.png",
+      "highlighted_image_url": "/database_samples/test_14/highlighted.png",
+      "annotated_image_url": "/database_samples/test_14/annotated.png",
+      "mask_image_url": "/database_samples/test_14/mask.png",
+      "max_dist_km": 0.274,
+      "total_area_m2": 28373.0
+    }
+  },
+  {
+    "id": "database-test_28",
+    "title": "Database Test: Highway & Grading Infrastructure Additions",
+    "description": "Benchmarking pair from Database/test (1). High-resolution 0.5m bi-temporal optical rasters covering 0.512 km \u00d7 0.512 km. Detects structural changes spanning 0.634 km.",
+    "keywords": [
+      "test_28",
+      "database",
+      "test 28",
+      "transportation & civil works",
+      "west highway interchange zone",
+      "levir-cd",
+      "change detection"
+    ],
+    "config_type": "Bi-Temporal Pair",
+    "files": [
+      {
+        "id": "test_28_pre",
+        "filename": "test_28_A_PreEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2022-03-12T04:15:00Z",
+        "bbox": [
+          22.554,
+          114.027,
+          22.558,
+          114.031
+        ],
+        "center": [
+          22.556,
+          114.029
+        ],
+        "thumbnail_url": "/database_samples/test_28/pre.png",
+        "data_type": "Optical",
+        "file_size_mb": 2.1
+      },
+      {
+        "id": "test_28_post",
+        "filename": "test_28_B_PostEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2024-06-20T04:18:22Z",
+        "bbox": [
+          22.554,
+          114.027,
+          22.558,
+          114.031
+        ],
+        "center": [
+          22.556,
+          114.029
+        ],
+        "thumbnail_url": "/database_samples/test_28/post.png",
+        "data_type": "Optical",
+        "file_size_mb": 1.9
+      }
+    ],
+    "default_query": "Identify transportation corridor clearing, highway grading, and arterial additions.",
+    "response": {
+      "text": "Automated Siamese-CD neural inference detected 17 distinct change clusters across the 0.512 km \u00d7 0.512 km observation tile (0.2621 km\u00b2 total footprint).\n\n\u2022 Total Changed Footprint: 25,700 m\u00b2 (0.0257 km\u00b2), representing 9.8% of the surveyed surface.\n\u2022 Spatial Distance Span: Visible changes span a direct linear distance of 0.634 km (634 meters) across the sector.\n\u2022 Identified Features: Structural building foundation footprints, new roofing envelopes, and connected impervious transport surfaces.\n\u2022 Sensor Metric: Ground Sampling Distance (GSD) calibrated at 0.50m/pixel with sub-pixel boundary refinement.",
+      "confidence_tier": "HIGH",
+      "confidence_score": 95.8,
+      "scenario_id": "database-test_28",
+      "execution_trace": [
+        {
+          "step": 1,
+          "tool": "load_database_rasters",
+          "tool_display_name": "Database Raster Pair Ingestion",
+          "params": {
+            "source": "Database/test (1)",
+            "pair_id": "test_28",
+            "gsd": 0.5
+          },
+          "duration_ms": 220,
+          "status": "success",
+          "output": {
+            "resolution": "0.5m/px",
+            "dimensions": [
+              1024,
+              1024
+            ],
+            "tile_footprint_km2": 0.2621
+          }
+        },
+        {
+          "step": 2,
+          "tool": "siamese_feature_fusion",
+          "tool_display_name": "Siamese-CD Differential Neural Backbone",
+          "params": {
+            "model": "Siamese-CD (S2Looking/LEVIR)",
+            "channels": 3,
+            "layers": 4
+          },
+          "duration_ms": 580,
+          "status": "success",
+          "output": {
+            "feature_diff_norm": 0.428,
+            "activated_clusters": 17
+          }
+        },
+        {
+          "step": 3,
+          "tool": "metric_spatial_distance_quantifier",
+          "tool_display_name": "Metric Distance & Cluster Quantifier",
+          "params": {
+            "gsd_m": 0.5,
+            "metric_units": "km"
+          },
+          "duration_ms": 310,
+          "status": "success",
+          "output": {
+            "max_span_km": 0.634,
+            "max_span_m": 634.0,
+            "total_changed_m2": 25700.2
+          }
+        },
+        {
+          "step": 4,
+          "tool": "render_highlighted_overlay",
+          "tool_display_name": "Highlight Overlay & Boundary Renderer",
+          "params": {
+            "overlay_color": "#e07856",
+            "outline_width": 3
+          },
+          "duration_ms": 190,
+          "status": "success",
+          "output": {
+            "status": "rendered",
+            "clusters_annotated": 17
+          }
+        }
+      ],
+      "change_stats": {
+        "baseline_area_km2": 0.2621,
+        "changed_area_km2": 0.0257,
+        "change_ratio": 0.098,
+        "change_type": "Transportation & Civil Works",
+        "confidence": 95.8,
+        "breakdown": [
+          {
+            "category": "Structural Additions",
+            "area_km2": 0.0167,
+            "percentage": 65
+          },
+          {
+            "category": "Ground Grading & Access",
+            "area_km2": 0.0064,
+            "percentage": 25
+          },
+          {
+            "category": "Boundary Alteration",
+            "area_km2": 0.0026,
+            "percentage": 10
+          }
+        ]
+      },
+      "grounding_boxes": [
+        {
+          "id": "clus_1",
+          "label": "Cluster #1 (232.0m \u00d7 112.0m)",
+          "category": "building",
+          "confidence": 91.0,
+          "bbox": [
+            22.55369,
+            114.02705,
+            22.5547,
+            114.02931
+          ],
+          "span_km": 0.232,
+          "area_m2": 6856.8
+        },
+        {
+          "id": "clus_2",
+          "label": "Cluster #2 (192.0m \u00d7 144.0m)",
+          "category": "infrastructure",
+          "confidence": 92.2,
+          "bbox": [
+            22.55413,
+            114.02752,
+            22.55542,
+            114.02939
+          ],
+          "span_km": 0.192,
+          "area_m2": 6721.8
+        },
+        {
+          "id": "clus_3",
+          "label": "Cluster #3 (240.0m \u00d7 128.0m)",
+          "category": "building",
+          "confidence": 93.4,
+          "bbox": [
+            22.55413,
+            114.02908,
+            22.55528,
+            114.03142
+          ],
+          "span_km": 0.24,
+          "area_m2": 5612.0
+        },
+        {
+          "id": "clus_4",
+          "label": "Cluster #4 (152.0m \u00d7 88.0m)",
+          "category": "infrastructure",
+          "confidence": 94.6,
+          "bbox": [
+            22.55542,
+            114.02705,
+            22.55622,
+            114.02853
+          ],
+          "span_km": 0.152,
+          "area_m2": 2967.2
+        },
+        {
+          "id": "clus_5",
+          "label": "Cluster #5 (112.0m \u00d7 80.0m)",
+          "category": "building",
+          "confidence": 95.8,
+          "bbox": [
+            22.55528,
+            114.0265,
+            22.556,
+            114.0276
+          ],
+          "span_km": 0.112,
+          "area_m2": 2539.5
+        },
+        {
+          "id": "clus_6",
+          "label": "Cluster #6 (112.0m \u00d7 80.0m)",
+          "category": "infrastructure",
+          "confidence": 97.0,
+          "bbox": [
+            22.55369,
+            114.02947,
+            22.55441,
+            114.03056
+          ],
+          "span_km": 0.112,
+          "area_m2": 2374.0
+        },
+        {
+          "id": "clus_7",
+          "label": "Cluster #7 (88.0m \u00d7 64.0m)",
+          "category": "building",
+          "confidence": 98.2,
+          "bbox": [
+            22.55492,
+            114.0265,
+            22.5555,
+            114.02736
+          ],
+          "span_km": 0.088,
+          "area_m2": 1311.8
+        },
+        {
+          "id": "clus_8",
+          "label": "Cluster #8 (72.0m \u00d7 72.0m)",
+          "category": "infrastructure",
+          "confidence": 91.0,
+          "bbox": [
+            22.55441,
+            114.0265,
+            22.55506,
+            114.02721
+          ],
+          "span_km": 0.072,
+          "area_m2": 1226.2
+        },
+        {
+          "id": "clus_9",
+          "label": "Cluster #9 (64.0m \u00d7 56.0m)",
+          "category": "building",
+          "confidence": 92.2,
+          "bbox": [
+            22.55773,
+            114.03087,
+            22.55823,
+            114.0315
+          ],
+          "span_km": 0.064,
+          "area_m2": 1001.2
+        },
+        {
+          "id": "clus_10",
+          "label": "Cluster #10 (40.0m \u00d7 64.0m)",
+          "category": "infrastructure",
+          "confidence": 93.4,
+          "bbox": [
+            22.55377,
+            114.0265,
+            22.55434,
+            114.02689
+          ],
+          "span_km": 0.064,
+          "area_m2": 802.5
+        },
+        {
+          "id": "clus_11",
+          "label": "Cluster #11 (48.0m \u00d7 40.0m)",
+          "category": "building",
+          "confidence": 94.6,
+          "bbox": [
+            22.55607,
+            114.0265,
+            22.55643,
+            114.02697
+          ],
+          "span_km": 0.048,
+          "area_m2": 565.8
+        },
+        {
+          "id": "clus_12",
+          "label": "Cluster #12 (40.0m \u00d7 40.0m)",
+          "category": "infrastructure",
+          "confidence": 95.8,
+          "bbox": [
+            22.55377,
+            114.03056,
+            22.55413,
+            114.03095
+          ],
+          "span_km": 0.04,
+          "area_m2": 456.5
+        }
+      ],
+      "has_heatmap": true,
+      "has_swipe_comparison": true,
+      "pre_image_url": "/database_samples/test_28/pre.png",
+      "post_image_url": "/database_samples/test_28/post.png",
+      "highlighted_image_url": "/database_samples/test_28/highlighted.png",
+      "annotated_image_url": "/database_samples/test_28/annotated.png",
+      "mask_image_url": "/database_samples/test_28/mask.png",
+      "max_dist_km": 0.634,
+      "total_area_m2": 25700.2
+    }
+  },
+  {
+    "id": "database-test_42",
+    "title": "Database Test: Commercial Foundation Footprints",
+    "description": "Benchmarking pair from Database/test (1). High-resolution 0.5m bi-temporal optical rasters covering 0.512 km \u00d7 0.512 km. Detects structural changes spanning 0.48 km.",
+    "keywords": [
+      "test_42",
+      "database",
+      "test 42",
+      "commercial construction",
+      "central tech innovation hub",
+      "levir-cd",
+      "change detection"
+    ],
+    "config_type": "Bi-Temporal Pair",
+    "files": [
+      {
+        "id": "test_42_pre",
+        "filename": "test_42_A_PreEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2022-03-12T04:15:00Z",
+        "bbox": [
+          22.536,
+          114.057,
+          22.54,
+          114.061
+        ],
+        "center": [
+          22.538,
+          114.059
+        ],
+        "thumbnail_url": "/database_samples/test_42/pre.png",
+        "data_type": "Optical",
+        "file_size_mb": 2.1
+      },
+      {
+        "id": "test_42_post",
+        "filename": "test_42_B_PostEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2024-06-20T04:18:22Z",
+        "bbox": [
+          22.536,
+          114.057,
+          22.54,
+          114.061
+        ],
+        "center": [
+          22.538,
+          114.059
+        ],
+        "thumbnail_url": "/database_samples/test_42/post.png",
+        "data_type": "Optical",
+        "file_size_mb": 1.9
+      }
+    ],
+    "default_query": "Isolate all structural additions and concrete foundation footprints across commercial plots.",
+    "response": {
+      "text": "Automated Siamese-CD neural inference detected 11 distinct change clusters across the 0.512 km \u00d7 0.512 km observation tile (0.2621 km\u00b2 total footprint).\n\n\u2022 Total Changed Footprint: 13,646 m\u00b2 (0.0137 km\u00b2), representing 5.21% of the surveyed surface.\n\u2022 Spatial Distance Span: Visible changes span a direct linear distance of 0.48 km (480 meters) across the sector.\n\u2022 Identified Features: Structural building foundation footprints, new roofing envelopes, and connected impervious transport surfaces.\n\u2022 Sensor Metric: Ground Sampling Distance (GSD) calibrated at 0.50m/pixel with sub-pixel boundary refinement.",
+      "confidence_tier": "HIGH",
+      "confidence_score": 95.8,
+      "scenario_id": "database-test_42",
+      "execution_trace": [
+        {
+          "step": 1,
+          "tool": "load_database_rasters",
+          "tool_display_name": "Database Raster Pair Ingestion",
+          "params": {
+            "source": "Database/test (1)",
+            "pair_id": "test_42",
+            "gsd": 0.5
+          },
+          "duration_ms": 220,
+          "status": "success",
+          "output": {
+            "resolution": "0.5m/px",
+            "dimensions": [
+              1024,
+              1024
+            ],
+            "tile_footprint_km2": 0.2621
+          }
+        },
+        {
+          "step": 2,
+          "tool": "siamese_feature_fusion",
+          "tool_display_name": "Siamese-CD Differential Neural Backbone",
+          "params": {
+            "model": "Siamese-CD (S2Looking/LEVIR)",
+            "channels": 3,
+            "layers": 4
+          },
+          "duration_ms": 580,
+          "status": "success",
+          "output": {
+            "feature_diff_norm": 0.428,
+            "activated_clusters": 11
+          }
+        },
+        {
+          "step": 3,
+          "tool": "metric_spatial_distance_quantifier",
+          "tool_display_name": "Metric Distance & Cluster Quantifier",
+          "params": {
+            "gsd_m": 0.5,
+            "metric_units": "km"
+          },
+          "duration_ms": 310,
+          "status": "success",
+          "output": {
+            "max_span_km": 0.48,
+            "max_span_m": 479.5,
+            "total_changed_m2": 13646.0
+          }
+        },
+        {
+          "step": 4,
+          "tool": "render_highlighted_overlay",
+          "tool_display_name": "Highlight Overlay & Boundary Renderer",
+          "params": {
+            "overlay_color": "#e07856",
+            "outline_width": 3
+          },
+          "duration_ms": 190,
+          "status": "success",
+          "output": {
+            "status": "rendered",
+            "clusters_annotated": 11
+          }
+        }
+      ],
+      "change_stats": {
+        "baseline_area_km2": 0.2621,
+        "changed_area_km2": 0.01365,
+        "change_ratio": 0.0521,
+        "change_type": "Commercial Construction",
+        "confidence": 95.8,
+        "breakdown": [
+          {
+            "category": "Structural Additions",
+            "area_km2": 0.0089,
+            "percentage": 65
+          },
+          {
+            "category": "Ground Grading & Access",
+            "area_km2": 0.0034,
+            "percentage": 25
+          },
+          {
+            "category": "Boundary Alteration",
+            "area_km2": 0.0014,
+            "percentage": 10
+          }
+        ]
+      },
+      "grounding_boxes": [
+        {
+          "id": "clus_1",
+          "label": "Cluster #1 (232.0m \u00d7 144.0m)",
+          "category": "building",
+          "confidence": 91.0,
+          "bbox": [
+            22.5367,
+            114.05923,
+            22.538,
+            114.0615
+          ],
+          "span_km": 0.232,
+          "area_m2": 7481.0
+        },
+        {
+          "id": "clus_2",
+          "label": "Cluster #2 (168.0m \u00d7 112.0m)",
+          "category": "infrastructure",
+          "confidence": 92.2,
+          "bbox": [
+            22.53714,
+            114.05986,
+            22.53814,
+            114.0615
+          ],
+          "span_km": 0.168,
+          "area_m2": 4691.8
+        },
+        {
+          "id": "clus_3",
+          "label": "Cluster #3 (224.0m \u00d7 88.0m)",
+          "category": "building",
+          "confidence": 93.4,
+          "bbox": [
+            22.53757,
+            114.05682,
+            22.53836,
+            114.059
+          ],
+          "span_km": 0.224,
+          "area_m2": 3063.8
+        },
+        {
+          "id": "clus_4",
+          "label": "Cluster #4 (120.0m \u00d7 88.0m)",
+          "category": "infrastructure",
+          "confidence": 94.6,
+          "bbox": [
+            22.53786,
+            114.06033,
+            22.53865,
+            114.0615
+          ],
+          "span_km": 0.12,
+          "area_m2": 2118.8
+        },
+        {
+          "id": "clus_5",
+          "label": "Cluster #5 (88.0m \u00d7 80.0m)",
+          "category": "building",
+          "confidence": 95.8,
+          "bbox": [
+            22.53714,
+            114.0565,
+            22.53786,
+            114.05736
+          ],
+          "span_km": 0.088,
+          "area_m2": 1445.0
+        },
+        {
+          "id": "clus_6",
+          "label": "Cluster #6 (48.0m \u00d7 48.0m)",
+          "category": "infrastructure",
+          "confidence": 97.0,
+          "bbox": [
+            22.53757,
+            114.0565,
+            22.538,
+            114.05697
+          ],
+          "span_km": 0.048,
+          "area_m2": 598.2
+        },
+        {
+          "id": "clus_7",
+          "label": "Cluster #7 (16.0m \u00d7 24.0m)",
+          "category": "building",
+          "confidence": 98.2,
+          "bbox": [
+            22.53915,
+            114.0565,
+            22.53937,
+            114.05666
+          ],
+          "span_km": 0.024,
+          "area_m2": 153.5
+        },
+        {
+          "id": "clus_8",
+          "label": "Cluster #8 (16.0m \u00d7 16.0m)",
+          "category": "infrastructure",
+          "confidence": 91.0,
+          "bbox": [
+            22.53901,
+            114.0604,
+            22.53915,
+            114.06056
+          ],
+          "span_km": 0.016,
+          "area_m2": 78.5
+        },
+        {
+          "id": "clus_9",
+          "label": "Cluster #9 (16.0m \u00d7 16.0m)",
+          "category": "building",
+          "confidence": 92.2,
+          "bbox": [
+            22.53959,
+            114.05666,
+            22.53973,
+            114.05682
+          ],
+          "span_km": 0.016,
+          "area_m2": 70.0
+        },
+        {
+          "id": "clus_10",
+          "label": "Cluster #10 (16.0m \u00d7 16.0m)",
+          "category": "infrastructure",
+          "confidence": 93.4,
+          "bbox": [
+            22.53901,
+            114.06064,
+            22.53915,
+            114.06079
+          ],
+          "span_km": 0.016,
+          "area_m2": 34.8
+        },
+        {
+          "id": "clus_11",
+          "label": "Cluster #11 (8.0m \u00d7 16.0m)",
+          "category": "building",
+          "confidence": 94.6,
+          "bbox": [
+            22.53959,
+            114.0565,
+            22.53973,
+            114.05658
+          ],
+          "span_km": 0.016,
+          "area_m2": 20.5
+        }
+      ],
+      "has_heatmap": true,
+      "has_swipe_comparison": true,
+      "pre_image_url": "/database_samples/test_42/pre.png",
+      "post_image_url": "/database_samples/test_42/post.png",
+      "highlighted_image_url": "/database_samples/test_42/highlighted.png",
+      "annotated_image_url": "/database_samples/test_42/annotated.png",
+      "mask_image_url": "/database_samples/test_42/mask.png",
+      "max_dist_km": 0.48,
+      "total_area_m2": 13646.0
+    }
+  },
+  {
+    "id": "database-test_100",
+    "title": "Database Test: Sprawling Multi-Quadrant Urban Transformation",
+    "description": "Benchmarking pair from Database/test (1). High-resolution 0.5m bi-temporal optical rasters covering 0.512 km \u00d7 0.512 km. Detects structural changes spanning 0.546 km.",
+    "keywords": [
+      "test_100",
+      "database",
+      "test 100",
+      "mixed-use urbanization",
+      "northern riverfront re-development",
+      "levir-cd",
+      "change detection"
+    ],
+    "config_type": "Bi-Temporal Pair",
+    "files": [
+      {
+        "id": "test_100_pre",
+        "filename": "test_100_A_PreEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2022-03-12T04:15:00Z",
+        "bbox": [
+          22.563,
+          114.07,
+          22.567,
+          114.074
+        ],
+        "center": [
+          22.565,
+          114.072
+        ],
+        "thumbnail_url": "/database_samples/test_100/pre.png",
+        "data_type": "Optical",
+        "file_size_mb": 2.1
+      },
+      {
+        "id": "test_100_post",
+        "filename": "test_100_B_PostEvent.png",
+        "sensor_hint": "cartosat3",
+        "bands": 3,
+        "crs": "EPSG:32650",
+        "resolution_m": 0.5,
+        "width": 1024,
+        "height": 1024,
+        "acquisition_date": "2024-06-20T04:18:22Z",
+        "bbox": [
+          22.563,
+          114.07,
+          22.567,
+          114.074
+        ],
+        "center": [
+          22.565,
+          114.072
+        ],
+        "thumbnail_url": "/database_samples/test_100/post.png",
+        "data_type": "Optical",
+        "file_size_mb": 1.9
+      }
+    ],
+    "default_query": "Comprehensive change audit: isolate all new buildings, road corridors, and cleared land parcels.",
+    "response": {
+      "text": "Automated Siamese-CD neural inference detected 19 distinct change clusters across the 0.512 km \u00d7 0.512 km observation tile (0.2621 km\u00b2 total footprint).\n\n\u2022 Total Changed Footprint: 29,711 m\u00b2 (0.0297 km\u00b2), representing 11.33% of the surveyed surface.\n\u2022 Spatial Distance Span: Visible changes span a direct linear distance of 0.546 km (546 meters) across the sector.\n\u2022 Identified Features: Structural building foundation footprints, new roofing envelopes, and connected impervious transport surfaces.\n\u2022 Sensor Metric: Ground Sampling Distance (GSD) calibrated at 0.50m/pixel with sub-pixel boundary refinement.",
+      "confidence_tier": "HIGH",
+      "confidence_score": 95.8,
+      "scenario_id": "database-test_100",
+      "execution_trace": [
+        {
+          "step": 1,
+          "tool": "load_database_rasters",
+          "tool_display_name": "Database Raster Pair Ingestion",
+          "params": {
+            "source": "Database/test (1)",
+            "pair_id": "test_100",
+            "gsd": 0.5
+          },
+          "duration_ms": 220,
+          "status": "success",
+          "output": {
+            "resolution": "0.5m/px",
+            "dimensions": [
+              1024,
+              1024
+            ],
+            "tile_footprint_km2": 0.2621
+          }
+        },
+        {
+          "step": 2,
+          "tool": "siamese_feature_fusion",
+          "tool_display_name": "Siamese-CD Differential Neural Backbone",
+          "params": {
+            "model": "Siamese-CD (S2Looking/LEVIR)",
+            "channels": 3,
+            "layers": 4
+          },
+          "duration_ms": 580,
+          "status": "success",
+          "output": {
+            "feature_diff_norm": 0.428,
+            "activated_clusters": 19
+          }
+        },
+        {
+          "step": 3,
+          "tool": "metric_spatial_distance_quantifier",
+          "tool_display_name": "Metric Distance & Cluster Quantifier",
+          "params": {
+            "gsd_m": 0.5,
+            "metric_units": "km"
+          },
+          "duration_ms": 310,
+          "status": "success",
+          "output": {
+            "max_span_km": 0.546,
+            "max_span_m": 545.7,
+            "total_changed_m2": 29710.8
+          }
+        },
+        {
+          "step": 4,
+          "tool": "render_highlighted_overlay",
+          "tool_display_name": "Highlight Overlay & Boundary Renderer",
+          "params": {
+            "overlay_color": "#e07856",
+            "outline_width": 3
+          },
+          "duration_ms": 190,
+          "status": "success",
+          "output": {
+            "status": "rendered",
+            "clusters_annotated": 19
+          }
+        }
+      ],
+      "change_stats": {
+        "baseline_area_km2": 0.2621,
+        "changed_area_km2": 0.02971,
+        "change_ratio": 0.1133,
+        "change_type": "Mixed-Use Urbanization",
+        "confidence": 95.8,
+        "breakdown": [
+          {
+            "category": "Structural Additions",
+            "area_km2": 0.0193,
+            "percentage": 65
+          },
+          {
+            "category": "Ground Grading & Access",
+            "area_km2": 0.0074,
+            "percentage": 25
+          },
+          {
+            "category": "Boundary Alteration",
+            "area_km2": 0.003,
+            "percentage": 10
+          }
+        ]
+      },
+      "grounding_boxes": [
+        {
+          "id": "clus_1",
+          "label": "Cluster #1 (344.0m \u00d7 224.0m)",
+          "category": "building",
+          "confidence": 91.0,
+          "bbox": [
+            22.56269,
+            114.07083,
+            22.56471,
+            114.07419
+          ],
+          "span_km": 0.344,
+          "area_m2": 17902.5
+        },
+        {
+          "id": "clus_2",
+          "label": "Cluster #2 (184.0m \u00d7 120.0m)",
+          "category": "infrastructure",
+          "confidence": 92.2,
+          "bbox": [
+            22.56269,
+            114.07177,
+            22.56377,
+            114.07356
+          ],
+          "span_km": 0.184,
+          "area_m2": 6333.5
+        },
+        {
+          "id": "clus_3",
+          "label": "Cluster #3 (168.0m \u00d7 232.0m)",
+          "category": "building",
+          "confidence": 93.4,
+          "bbox": [
+            22.56507,
+            114.07255,
+            22.56716,
+            114.07419
+          ],
+          "span_km": 0.232,
+          "area_m2": 6103.2
+        },
+        {
+          "id": "clus_4",
+          "label": "Cluster #4 (200.0m \u00d7 104.0m)",
+          "category": "infrastructure",
+          "confidence": 94.6,
+          "bbox": [
+            22.56406,
+            114.07239,
+            22.565,
+            114.07434
+          ],
+          "span_km": 0.2,
+          "area_m2": 5953.8
+        },
+        {
+          "id": "clus_5",
+          "label": "Cluster #5 (160.0m \u00d7 88.0m)",
+          "category": "building",
+          "confidence": 95.8,
+          "bbox": [
+            22.56349,
+            114.07239,
+            22.56428,
+            114.07395
+          ],
+          "span_km": 0.16,
+          "area_m2": 4688.8
+        },
+        {
+          "id": "clus_6",
+          "label": "Cluster #6 (168.0m \u00d7 88.0m)",
+          "category": "infrastructure",
+          "confidence": 97.0,
+          "bbox": [
+            22.5632,
+            114.07216,
+            22.56399,
+            114.0738
+          ],
+          "span_km": 0.168,
+          "area_m2": 4571.8
+        },
+        {
+          "id": "clus_7",
+          "label": "Cluster #7 (160.0m \u00d7 96.0m)",
+          "category": "building",
+          "confidence": 98.2,
+          "bbox": [
+            22.56435,
+            114.07294,
+            22.56522,
+            114.0745
+          ],
+          "span_km": 0.16,
+          "area_m2": 4343.0
+        },
+        {
+          "id": "clus_8",
+          "label": "Cluster #8 (136.0m \u00d7 80.0m)",
+          "category": "infrastructure",
+          "confidence": 91.0,
+          "bbox": [
+            22.56471,
+            114.07317,
+            22.56543,
+            114.0745
+          ],
+          "span_km": 0.136,
+          "area_m2": 3304.2
+        },
+        {
+          "id": "clus_9",
+          "label": "Cluster #9 (120.0m \u00d7 72.0m)",
+          "category": "building",
+          "confidence": 92.2,
+          "bbox": [
+            22.56507,
+            114.07333,
+            22.56572,
+            114.0745
+          ],
+          "span_km": 0.12,
+          "area_m2": 2640.5
+        },
+        {
+          "id": "clus_10",
+          "label": "Cluster #10 (96.0m \u00d7 56.0m)",
+          "category": "infrastructure",
+          "confidence": 93.4,
+          "bbox": [
+            22.5655,
+            114.07356,
+            22.56601,
+            114.0745
+          ],
+          "span_km": 0.096,
+          "area_m2": 1647.8
+        },
+        {
+          "id": "clus_11",
+          "label": "Cluster #11 (72.0m \u00d7 48.0m)",
+          "category": "building",
+          "confidence": 94.6,
+          "bbox": [
+            22.56586,
+            114.0738,
+            22.5663,
+            114.0745
+          ],
+          "span_km": 0.072,
+          "area_m2": 982.8
+        },
+        {
+          "id": "clus_12",
+          "label": "Cluster #12 (64.0m \u00d7 40.0m)",
+          "category": "infrastructure",
+          "confidence": 95.8,
+          "bbox": [
+            22.56291,
+            114.07387,
+            22.56327,
+            114.0745
+          ],
+          "span_km": 0.064,
+          "area_m2": 701.8
+        }
+      ],
+      "has_heatmap": true,
+      "has_swipe_comparison": true,
+      "pre_image_url": "/database_samples/test_100/pre.png",
+      "post_image_url": "/database_samples/test_100/post.png",
+      "highlighted_image_url": "/database_samples/test_100/highlighted.png",
+      "annotated_image_url": "/database_samples/test_100/annotated.png",
+      "mask_image_url": "/database_samples/test_100/mask.png",
+      "max_dist_km": 0.546,
+      "total_area_m2": 29710.8
+    }
+  }
+];
+
+export function matchExplicitScenario(query: string): MissionScenario | null {
+  const q = query.toLowerCase().trim();
+
+  // If it's a greeting or general capability question or metric question, do NOT switch scenario!
+  if (
+    /^(hi|hello|hey|greetings|hola|good\s*(morning|afternoon|evening)|yo)\b/i.test(q) ||
+    ["hi", "hello", "hey", "help"].includes(q) ||
+    q.includes("used for") ||
+    q.includes("what is this") ||
+    q.includes("what can you do") ||
+    q.includes("how does this work") ||
+    q.includes("make it real") ||
+    q.includes("distance") ||
+    q.includes("km") ||
+    q.includes("meter") ||
+    q.includes("area") ||
+    q.includes("footprint") ||
+    q.includes("highlight") ||
+    q.includes("overlay")
+  ) {
+    return null;
+  }
+
+  for (let i = 3; i < MOCK_SCENARIOS.length; i++) {
+    const sc = MOCK_SCENARIOS[i];
+    if (sc.keywords.some((k) => q.includes(k.toLowerCase()))) {
+      return sc;
+    }
+  }
+
+  if (q.includes("sar") || q.includes("radar") || q.includes("all-weather")) {
+    return MOCK_SCENARIOS[2];
+  }
+  
+  if (q.includes("flood") || q.includes("inundation") || q.includes("submergence") || q.includes("brahmaputra")) {
+    return MOCK_SCENARIOS[1];
+  }
+
+  if (q.includes("visakhapatnam") || q.includes("vessel") || q.includes("tanker") || q.includes("berth") || q.includes("port grounding")) {
+    return MOCK_SCENARIOS[0];
+  }
+
+  if (q.includes("database") || q.includes("test_") || q.includes("test 1") || q.includes("preset")) {
+    return MOCK_SCENARIOS[3];
+  }
+  
+  return null;
+}
+
+export function findMatchingScenario(query: string, uploadedFilesCount: number, hasSar: boolean): MissionScenario {
+  const explicit = matchExplicitScenario(query);
+  if (explicit) return explicit;
+
+  const q = query.toLowerCase();
+  if (q.includes("sar") || q.includes("radar") || q.includes("cloud") || q.includes("fusion") || q.includes("all-weather") || hasSar) {
+    return MOCK_SCENARIOS[2];
+  }
+  
+  if (q.includes("flood") || q.includes("damage") || q.includes("water") || q.includes("inundation")) {
+    return MOCK_SCENARIOS[1];
+  }
+
+  if (q.includes("database") || q.includes("test_") || q.includes("test 1") || q.includes("building") || q.includes("change")) {
+    return MOCK_SCENARIOS[3]; // Default to database test_1
+  }
+  
+  return MOCK_SCENARIOS[0];
+}
