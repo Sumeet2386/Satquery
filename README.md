@@ -119,6 +119,25 @@ This outputs F1, IoU, precision, recall, and inference time per model.
 
 ---
 
+## Model Training & S2Looking Support
+
+SatQuery AI supports training and fine-tuning on bi-temporal satellite datasets including **S2Looking** (side-looking building change detection) and **LEVIR-CD**:
+
+```bash
+# Train Siamese-CD on S2Looking dataset (Apple Silicon MPS / CUDA / CPU)
+python ml/train.py \
+    --data_dir ./ml/data/S2Looking \
+    --output_dir ./ml/model_cache/s2looking_cd \
+    --epochs 5 \
+    --batch_size 16 \
+    --lr 3e-4 \
+    --device auto
+```
+
+Trained checkpoints are automatically saved to `ml/model_cache/s2looking_cd/best_s2looking_cd.pth` and registered in `ml/registry/models.json`.
+
+---
+
 ## Running Tests
 
 ```bash

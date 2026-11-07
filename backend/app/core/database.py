@@ -46,11 +46,14 @@ async def get_db() -> AsyncSession:
 
 async def init_db() -> None:
     """Create all tables on startup (dev only — use Alembic in production)."""
-    async with engine.begin() as conn:
-        # Verify connection
-        await conn.execute(text("SELECT 1"))
-        logger.info("Database connection verified")
-        # Import models to register them with Base.metadata
-        from app.models import user, analysis, image_upload, spatial_result  # noqa: F401
-        await conn.run_sync(Base.metadata.create_all)
-        logger.info("Database tables created/verified")
+    try:
+        async with engine.begin() as conn:
+            # Verify connection
+            await conn.execute(text("SELECT 1"))
+            logger.info("Database connection verified")
+            # Import models to register them with Base.metadata
+            from app.models import user, analysis, image_upload, spatial_result  # noqa: F401
+            await conn.run_sync(Base.metadata.create_all)
+            logger.info("Database tables created/verified")
+    except Exception as exc:
+        logger.warning("Database unavailable (running in standalone/in-memory mode)", error=str(exc))
