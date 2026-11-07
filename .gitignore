@@ -24,6 +24,8 @@ htmlcov/
 
 # ML / Models
 ml/model_cache/
+ml/data/
+Database/
 ml/evaluation/data/
 ml/evaluation/results/
 *.pth

@@ -79,5 +79,57 @@
     },
     "commercial_use": true,
     "notes": "Higher memory usage than BIT. Good for fine-grained building change."
+  },
+  "siamese_cd": {
+    "name": "Siamese-CD (Multiscale LEVIR-CD)",
+    "description": "Siamese dual-branch multiscale feature network with differential fusion.",
+    "adapter_class": "core.inference.siamese_adapter.SiameseAdapter",
+    "checkpoint_path": "./ml/model_cache/siamese_cd/best_siamese_cd.pth",
+    "licence": "MIT",
+    "licence_url": "https://opensource.org/licenses/MIT",
+    "paper_url": "https://chenhao.in/LEVIR/",
+    "status": "training",
+    "recommended_for": ["building_footprint_change", "urban_expansion"],
+    "input_size": 256,
+    "input_bands": 3,
+    "evaluation": {
+      "dataset": "LEVIR-CD",
+      "f1": null,
+      "iou": null,
+      "note": "Trained on Database/train.zip dataset"
+    },
+    "inference_config": {
+      "device": "auto",
+      "batch_size": 1,
+      "threshold": 0.5
+    },
+    "commercial_use": true,
+    "notes": "Trained with composite BCE + Soft Dice loss on 1024x1024 satellite imagery."
+  },
+  "s2looking_cd": {
+    "name": "Siamese-CD (S2Looking Off-Nadir)",
+    "description": "Siamese dual-branch multiscale feature network trained on S2Looking side-looking satellite building dataset.",
+    "adapter_class": "core.inference.siamese_adapter.SiameseAdapter",
+    "checkpoint_path": "./ml/model_cache/s2looking_cd/best_s2looking_cd.pth",
+    "licence": "CC BY-NC 4.0",
+    "licence_url": "https://github.com/S2Looking/S2Looking",
+    "paper_url": "https://arxiv.org/abs/2104.11205",
+    "status": "available",
+    "recommended_for": ["off_nadir_building_change", "side_looking_sensors", "urban_demolition_and_construction"],
+    "input_size": 256,
+    "input_bands": 3,
+    "evaluation": {
+      "dataset": "S2Looking",
+      "f1": 0.2178,
+      "iou": 0.1222,
+      "note": "Trained on Database/S2Looking.zip off-nadir satellite building dataset with BCE + Soft Dice Loss"
+    },
+    "inference_config": {
+      "device": "auto",
+      "batch_size": 1,
+      "threshold": 0.5
+    },
+    "commercial_use": false,
+    "notes": "Trained with composite BCE + Soft Dice loss on 1024x1024 side-looking satellite imagery from S2Looking."
   }
 }

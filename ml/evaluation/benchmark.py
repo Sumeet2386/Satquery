@@ -150,6 +150,7 @@ def benchmark_model(
         import sys
         sys.path.insert(0, str(Path(__file__).parent.parent.parent / "backend"))
         adapter_map = {
+            "siamese_cd":   "core.inference.siamese_adapter.SiameseAdapter",
             "changeformer": "core.inference.changeformer_adapter.ChangeFormerAdapter",
             "bit":          "core.inference.bit_adapter.BITAdapter",
             "snunet":       "core.inference.snunet_adapter.SNUNetAdapter",
