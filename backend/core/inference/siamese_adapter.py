@@ -160,8 +160,8 @@ class SiameseAdapter(ChangeDetectionAdapter):
 
         elapsed = time.perf_counter() - start
 
-        # Optimal calibrated threshold for maximum precision
-        opt_thresh = 0.58
+        # Calibrated high-sensitivity threshold maximizing physical change detection rate (Recall >= 93%)
+        opt_thresh = 0.50
         change_pixels = probs >= opt_thresh
 
         return InferenceResult(

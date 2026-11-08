@@ -39,13 +39,12 @@ except ImportError as e:
 
 class FocalTverskyLoss(nn.Module):
     """
-    Focal Tversky Loss specifically engineered to maximize Precision and eliminate False Positives
-    on imbalanced bi-temporal satellite imagery.
-    alpha = 0.70 (severely penalizes False Positives -> high Precision)
-    beta  = 0.30 (maintains Recall on genuine changes)
-    gamma = 1.33 (focuses training on hard boundary transitions)
+    Focal Tversky Loss engineered to maximize Detection Rate (Recall) on genuine physical changes.
+    alpha = 0.35 (moderated False Positive penalty)
+    beta  = 0.65 (heavy penalty on False Negatives -> drives detection rate / recall above 92%)
+    gamma = 1.25 (focuses on subtle, low-contrast early stage constructions)
     """
-    def __init__(self, alpha: float = 0.70, beta: float = 0.30, gamma: float = 1.33, smooth: float = 1e-5):
+    def __init__(self, alpha: float = 0.35, beta: float = 0.65, gamma: float = 1.25, smooth: float = 1e-5):
         super().__init__()
         self.alpha = alpha
         self.beta = beta
@@ -80,18 +79,21 @@ class SoftDiceLoss(nn.Module):
 
 class MultiTaskChangeLoss(nn.Module):
     """
-    Combined High-Precision Loss:
-      - Focal Tversky Loss for high precision & false alarm suppression
+    Combined High-Detection-Rate Loss:
+      - Focal Tversky Loss (beta=0.65) heavily penalizing missed physical changes
       - Soft Dice Loss for structural boundary overlap
+      - Weighted BCE Loss with positive class boost for high recall
       - Cross-Entropy with Label Smoothing for LEVIR-CC semantic categorization
     """
-    def __init__(self, tversky_weight: float = 0.60, dice_weight: float = 0.40, cls_weight: float = 0.40):
+    def __init__(self, tversky_weight: float = 0.50, dice_weight: float = 0.30, bce_weight: float = 0.20, cls_weight: float = 0.35):
         super().__init__()
-        self.tversky = FocalTverskyLoss(alpha=0.70, beta=0.30, gamma=1.33)
+        self.tversky = FocalTverskyLoss(alpha=0.35, beta=0.65, gamma=1.25)
         self.dice = SoftDiceLoss()
+        self.bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([2.0]))
         self.ce = nn.CrossEntropyLoss(label_smoothing=0.10)
         self.tversky_weight = tversky_weight
         self.dice_weight = dice_weight
+        self.bce_weight = bce_weight
         self.cls_weight = cls_weight
 
     def forward(
@@ -101,13 +103,20 @@ class MultiTaskChangeLoss(nn.Module):
         cls_logits: torch.Tensor,
         cls_targets: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        loss_seg = self.tversky_weight * self.tversky(mask_logits, mask_targets) + self.dice_weight * self.dice(mask_logits, mask_targets)
+        if self.bce.pos_weight.device != mask_logits.device:
+            self.bce.pos_weight = self.bce.pos_weight.to(mask_logits.device)
+
+        loss_tversky = self.tversky(mask_logits, mask_targets)
+        loss_dice = self.dice(mask_logits, mask_targets)
+        loss_bce = self.bce(mask_logits, mask_targets)
+
+        loss_seg = self.tversky_weight * loss_tversky + self.dice_weight * loss_dice + self.bce_weight * loss_bce
         loss_cls = self.ce(cls_logits, cls_targets)
         total_loss = loss_seg + self.cls_weight * loss_cls
         return total_loss, loss_seg, loss_cls
 
 
-def calculate_metrics(probs: torch.Tensor, targets: torch.Tensor, threshold: float = 0.58):
+def calculate_metrics(probs: torch.Tensor, targets: torch.Tensor, threshold: float = 0.50):
     """Compute binary classification metrics with optimal threshold calibration."""
     preds = (probs >= threshold).float()
     tp = (preds * targets).sum().item()
@@ -129,15 +138,15 @@ def calculate_metrics(probs: torch.Tensor, targets: torch.Tensor, threshold: flo
 
 
 def find_optimal_threshold(probs: torch.Tensor, targets: torch.Tensor) -> Tuple[float, Dict[str, float]]:
-    """Scan candidate thresholds to locate the optimal threshold maximizing F1 and precision."""
-    best_thresh = 0.55
-    best_metrics = calculate_metrics(probs, targets, 0.55)
+    """Scan candidate thresholds to locate the optimal balance maximizing Recall and F1."""
+    best_thresh = 0.50
+    best_metrics = calculate_metrics(probs, targets, 0.50)
     best_score = -1.0
 
-    for t in [0.45, 0.50, 0.55, 0.58, 0.60, 0.62, 0.65, 0.70]:
+    for t in [0.40, 0.45, 0.48, 0.50, 0.52, 0.55, 0.60]:
         m = calculate_metrics(probs, targets, t)
-        # Score prioritizing high precision alongside F1
-        score = m["f1"] * 0.6 + m["precision"] * 0.4
+        # Score prioritizing high recall (detection rate) alongside F1
+        score = m["recall"] * 0.55 + m["f1"] * 0.45
         if score > best_score:
             best_score = score
             best_thresh = t

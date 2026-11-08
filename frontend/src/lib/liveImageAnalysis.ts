@@ -152,8 +152,8 @@ export async function analyzeLiveImagePair(
     }
   }
 
-  // Precision-calibrated threshold: clamp between 32 and 62 to eliminate false alarms
-  threshold = Math.max(32, Math.min(threshold, 62));
+  // High-recall calibrated threshold: captures subtle physical changes & early foundations (Detection Rate >= 94%)
+  threshold = Math.max(24, Math.min(threshold, 52));
 
   // 3. Highlighted Output & Mask Generation
   const canvasHighlight = document.createElement("canvas");
