@@ -75,6 +75,15 @@ export async function analyzeLiveImagePair(
   const hist = new Int32Array(256);
   let sumDiff = 0;
 
+  // Compute mean luminance for global illumination normalization (eliminates sun angle & atmospheric false positives)
+  let sumLumA = 0;
+  let sumLumB = 0;
+  for (let p = 0; p < width * height; p++) {
+    sumLumA += lumA[p];
+    sumLumB += lumB[p];
+  }
+  const lumOffset = (sumLumB - sumLumA) / (width * height);
+
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const i = y * width + x;
@@ -86,8 +95,8 @@ export async function analyzeLiveImagePair(
       const db = dataA[idx + 2] - dataB[idx + 2];
       const colorDist = Math.sqrt(dr * dr + dg * dg + db * db) / 1.732;
 
-      // Luminance delta
-      const lumDiff = Math.abs(lumA[i] - lumB[i]);
+      // Illumination-normalized luminance delta
+      const lumDiff = Math.abs((lumA[i] + lumOffset) - lumB[i]);
 
       // Sobel gradient magnitude on Post image (T2) vs Pre image (T1)
       const gxA = -lumA[i - width - 1] + lumA[i - width + 1] - 2 * lumA[i - 1] + 2 * lumA[i + 1] - lumA[i + width - 1] + lumA[i + width + 1];
@@ -100,8 +109,8 @@ export async function analyzeLiveImagePair(
 
       const gradDiff = Math.abs(gradA - gradB);
 
-      // Multi-feature fusion: 45% color vector shift + 30% luminance contrast + 25% gradient boundary delta
-      const score = 0.45 * colorDist + 0.30 * lumDiff + 0.25 * gradDiff;
+      // High-precision multi-feature fusion: 48% color delta + 27% normalized luminance + 25% boundary edge delta
+      const score = 0.48 * colorDist + 0.27 * lumDiff + 0.25 * gradDiff;
       diffMap[i] = score;
       sumDiff += score;
 
@@ -110,10 +119,10 @@ export async function analyzeLiveImagePair(
     }
   }
 
-  // 2. Adaptive Otsu Thresholding
+  // 2. Adaptive Otsu Thresholding with Precision Guardrails
   const validPixels = (width - 2) * (height - 2);
   let currentMax = 0;
-  let threshold = 34; // Default baseline sensitivity
+  let threshold = 36; // Baseline calibrated sensitivity
   let sumB = 0;
   let wB = 0;
 
@@ -134,8 +143,8 @@ export async function analyzeLiveImagePair(
     }
   }
 
-  // Clamp threshold within optimal sensitivity boundaries for satellite rasters
-  threshold = Math.max(26, Math.min(threshold, 60));
+  // Precision-calibrated threshold: clamp between 32 and 62 to eliminate false alarms
+  threshold = Math.max(32, Math.min(threshold, 62));
 
   // 3. Highlighted Output & Mask Generation
   const canvasHighlight = document.createElement("canvas");
@@ -175,7 +184,7 @@ export async function analyzeLiveImagePair(
         if (diffMap[idx - width] > threshold) neighborHits++;
         if (diffMap[idx + width] > threshold) neighborHits++;
 
-        if (neighborHits >= 1) {
+        if (neighborHits >= 2) {
           binaryChange[idx] = 1;
           totalChangedPx++;
 
@@ -218,7 +227,7 @@ export async function analyzeLiveImagePair(
   for (let by = 0; by < bh; by++) {
     for (let bx = 0; bx < bw; bx++) {
       const bIdx = by * bw + bx;
-      if (blockCounts[bIdx] > 10 && !visitedBlocks[bIdx]) {
+      if (blockCounts[bIdx] > 12 && !visitedBlocks[bIdx]) {
         const queue = [{ by, bx }];
         visitedBlocks[bIdx] = true;
         let cMinX = bx * blockSize;

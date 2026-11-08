@@ -46,10 +46,42 @@ class ConvBlock(nn.Module):
         return self.conv(x)
 
 
+class ChannelAttention(nn.Module):
+    """Squeeze-and-Excitation Channel Attention module."""
+    def __init__(self, channels: int, reduction: int = 16):
+        super().__init__()
+        reduced = max(8, channels // reduction)
+        self.fc = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(channels, reduced, kernel_size=1, bias=False),
+            nn.GELU(),
+            nn.Conv2d(reduced, channels, kernel_size=1, bias=False),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x * self.fc(x)
+
+
+class SpatialAttention(nn.Module):
+    """Spatial Attention module targeting structural changes across bands."""
+    def __init__(self, kernel_size: int = 7):
+        super().__init__()
+        self.conv = nn.Conv2d(2, 1, kernel_size=kernel_size, padding=kernel_size // 2, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        scale = self.sigmoid(self.conv(torch.cat([avg_out, max_out], dim=1)))
+        return x * scale
+
+
 class DifferentialFusion(nn.Module):
     """
     Differential and Cross-Temporal Feature Fusion block.
-    Computes absolute difference and concatenated contextual features.
+    Computes absolute difference, concatenated contextual features,
+    and refines representations with dual Channel and Spatial Attention.
     """
     def __init__(self, channels: int):
         super().__init__()
@@ -62,11 +94,16 @@ class DifferentialFusion(nn.Module):
             nn.BatchNorm2d(channels),
             nn.GELU(),
         )
+        self.ca = ChannelAttention(channels)
+        self.sa = SpatialAttention()
 
     def forward(self, f1: torch.Tensor, f2: torch.Tensor) -> torch.Tensor:
         diff = torch.abs(f1 - f2)
         combined = torch.cat([f1, f2, diff], dim=1)
-        return self.fusion(combined)
+        out = self.fusion(combined)
+        out = self.ca(out)
+        out = self.sa(out)
+        return out
 
 
 class DecoderBlock(nn.Module):
@@ -202,3 +239,29 @@ class SiameseChangeDetector(nn.Module):
             return mask_logits, cls_logits
 
         return mask_logits
+
+    def forward_tta(self, img_a: torch.Tensor, img_b: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Test-Time Augmentation (TTA) forward pass.
+        Averages predictions across original, horizontal flip, and vertical flip inputs
+        to significantly reduce false positives, smooth jitter, and increase reliability.
+        """
+        # 1. Original
+        m1, c1 = self.forward(img_a, img_b, return_class=True)
+        p1 = torch.sigmoid(m1)
+
+        # 2. Horizontal flip
+        a_h = torch.flip(img_a, dims=[3])
+        b_h = torch.flip(img_b, dims=[3])
+        m2, c2 = self.forward(a_h, b_h, return_class=True)
+        p2 = torch.flip(torch.sigmoid(m2), dims=[3])
+
+        # 3. Vertical flip
+        a_v = torch.flip(img_a, dims=[2])
+        b_v = torch.flip(img_b, dims=[2])
+        m3, c3 = self.forward(a_v, b_v, return_class=True)
+        p3 = torch.flip(torch.sigmoid(m3), dims=[2])
+
+        avg_probs = (p1 + p2 + p3) / 3.0
+        avg_cls = (c1 + c2 + c3) / 3.0
+        return avg_probs, avg_cls

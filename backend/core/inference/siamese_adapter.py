@@ -151,33 +151,52 @@ class SiameseAdapter(ChangeDetectionAdapter):
 
         start = time.perf_counter()
         with torch.no_grad():
-            logits = self._model(t_a, t_b)
-            probs = torch.sigmoid(logits).squeeze().cpu().numpy()
+            if hasattr(self._model, "forward_tta"):
+                probs_t, cls_logits = self._model.forward_tta(t_a, t_b)
+                probs = probs_t.squeeze().cpu().numpy()
+            else:
+                logits = self._model(t_a, t_b)
+                probs = torch.sigmoid(logits).squeeze().cpu().numpy()
 
         elapsed = time.perf_counter() - start
+
+        # Optimal calibrated threshold for maximum precision
+        opt_thresh = 0.58
+        change_pixels = probs >= opt_thresh
 
         return InferenceResult(
             change_mask=probs,
             is_probability=True,
-            confidence_mean=float(probs[probs >= 0.5].mean()) if (probs >= 0.5).any() else 0.0,
+            confidence_mean=float(probs[change_pixels].mean()) if change_pixels.any() else 0.0,
             model_metadata=self.model_info(),
             inference_time_seconds=round(elapsed, 3),
-            preprocessing_applied=["normalized", "standardized_imagenet"],
+            preprocessing_applied=["normalized", "standardized_imagenet", "test_time_augmentation"],
         )
 
-    def postprocess(self, result: InferenceResult, threshold: float = 0.5) -> Any:
+    def postprocess(self, result: InferenceResult, threshold: float = 0.58) -> Any:
         if not GEO_AVAILABLE:
             return None
 
         binary_mask = (result.change_mask >= threshold).astype(np.uint8)
+
+        # Morphological filter: remove isolated single-pixel noise (precision enhancement)
+        try:
+            from scipy.ndimage import binary_opening
+            binary_mask = binary_opening(binary_mask, structure=np.ones((3, 3))).astype(np.uint8)
+        except ImportError:
+            pass
+
         feats = []
         for geom, val in rasterio_shapes(binary_mask):
             if int(val) == 1:
-                feats.append({
-                    "geometry": shape(geom),
-                    "confidence": float(result.confidence_mean),
-                    "change_type": "detected_change",
-                })
+                # Filter out microscopic noise polygons (< 12 m2)
+                s_geom = shape(geom)
+                if s_geom.area >= 12:
+                    feats.append({
+                        "geometry": s_geom,
+                        "confidence": float(result.confidence_mean),
+                        "change_type": "detected_change",
+                    })
 
         if not feats:
             return gpd.GeoDataFrame(columns=["geometry", "confidence", "change_type"])

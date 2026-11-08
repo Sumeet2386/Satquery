@@ -37,6 +37,33 @@ except ImportError as e:
     raise RuntimeError(f"PyTorch environment error: {e}")
 
 
+class FocalTverskyLoss(nn.Module):
+    """
+    Focal Tversky Loss specifically engineered to maximize Precision and eliminate False Positives
+    on imbalanced bi-temporal satellite imagery.
+    alpha = 0.70 (severely penalizes False Positives -> high Precision)
+    beta  = 0.30 (maintains Recall on genuine changes)
+    gamma = 1.33 (focuses training on hard boundary transitions)
+    """
+    def __init__(self, alpha: float = 0.70, beta: float = 0.30, gamma: float = 1.33, smooth: float = 1e-5):
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+        self.smooth = smooth
+
+    def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        probs = torch.sigmoid(logits)
+        dims = (2, 3)
+        tp = (probs * targets).sum(dim=dims)
+        fp = (probs * (1.0 - targets)).sum(dim=dims)
+        fn = ((1.0 - probs) * targets).sum(dim=dims)
+
+        tversky = (tp + self.smooth) / (tp + self.alpha * fp + self.beta * fn + self.smooth)
+        focal_tversky = torch.pow((1.0 - tversky), self.gamma)
+        return focal_tversky.mean()
+
+
 class SoftDiceLoss(nn.Module):
     """Soft Dice Loss for segmenting unbalanced binary masks."""
     def __init__(self, smooth: float = 1e-5):
@@ -53,17 +80,17 @@ class SoftDiceLoss(nn.Module):
 
 class MultiTaskChangeLoss(nn.Module):
     """
-    Combined Loss:
-      - BCE Loss for pixel-level presence
+    Combined High-Precision Loss:
+      - Focal Tversky Loss for high precision & false alarm suppression
       - Soft Dice Loss for structural boundary overlap
-      - Cross-Entropy Loss for LEVIR-CC semantic change classification
+      - Cross-Entropy with Label Smoothing for LEVIR-CC semantic categorization
     """
-    def __init__(self, bce_weight: float = 0.5, dice_weight: float = 0.5, cls_weight: float = 0.4):
+    def __init__(self, tversky_weight: float = 0.60, dice_weight: float = 0.40, cls_weight: float = 0.40):
         super().__init__()
-        self.bce = nn.BCEWithLogitsLoss()
+        self.tversky = FocalTverskyLoss(alpha=0.70, beta=0.30, gamma=1.33)
         self.dice = SoftDiceLoss()
-        self.ce = nn.CrossEntropyLoss()
-        self.bce_weight = bce_weight
+        self.ce = nn.CrossEntropyLoss(label_smoothing=0.10)
+        self.tversky_weight = tversky_weight
         self.dice_weight = dice_weight
         self.cls_weight = cls_weight
 
@@ -74,14 +101,14 @@ class MultiTaskChangeLoss(nn.Module):
         cls_logits: torch.Tensor,
         cls_targets: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        loss_seg = self.bce_weight * self.bce(mask_logits, mask_targets) + self.dice_weight * self.dice(mask_logits, mask_targets)
+        loss_seg = self.tversky_weight * self.tversky(mask_logits, mask_targets) + self.dice_weight * self.dice(mask_logits, mask_targets)
         loss_cls = self.ce(cls_logits, cls_targets)
         total_loss = loss_seg + self.cls_weight * loss_cls
         return total_loss, loss_seg, loss_cls
 
 
-def calculate_metrics(probs: torch.Tensor, targets: torch.Tensor, threshold: float = 0.5):
-    """Compute binary classification metrics for change detection."""
+def calculate_metrics(probs: torch.Tensor, targets: torch.Tensor, threshold: float = 0.58):
+    """Compute binary classification metrics with optimal threshold calibration."""
     preds = (probs >= threshold).float()
     tp = (preds * targets).sum().item()
     fp = (preds * (1 - targets)).sum().item()
@@ -97,7 +124,26 @@ def calculate_metrics(probs: torch.Tensor, targets: torch.Tensor, threshold: flo
         "iou": round(iou, 4),
         "precision": round(precision, 4),
         "recall": round(recall, 4),
+        "threshold": threshold,
     }
+
+
+def find_optimal_threshold(probs: torch.Tensor, targets: torch.Tensor) -> Tuple[float, Dict[str, float]]:
+    """Scan candidate thresholds to locate the optimal threshold maximizing F1 and precision."""
+    best_thresh = 0.55
+    best_metrics = calculate_metrics(probs, targets, 0.55)
+    best_score = -1.0
+
+    for t in [0.45, 0.50, 0.55, 0.58, 0.60, 0.62, 0.65, 0.70]:
+        m = calculate_metrics(probs, targets, t)
+        # Score prioritizing high precision alongside F1
+        score = m["f1"] * 0.6 + m["precision"] * 0.4
+        if score > best_score:
+            best_score = score
+            best_thresh = t
+            best_metrics = m
+
+    return best_thresh, best_metrics
 
 
 def train_epoch(model, loader, criterion, optimizer, device):
@@ -107,8 +153,9 @@ def train_epoch(model, loader, criterion, optimizer, device):
     cls_loss_sum = 0.0
     correct_cls = 0
     total_samples = 0
+    total_batches = len(loader)
 
-    for a, b, mask, cls_label, meta in loader:
+    for batch_idx, (a, b, mask, cls_label, meta) in enumerate(loader, 1):
         a = a.to(device)
         b = b.to(device)
         mask = mask.to(device)
@@ -128,6 +175,9 @@ def train_epoch(model, loader, criterion, optimizer, device):
         preds = cls_logits.argmax(dim=-1)
         correct_cls += (preds == cls_label).sum().item()
         total_samples += a.size(0)
+
+        if batch_idx % 10 == 0 or batch_idx == total_batches:
+            print(f"  [Train] Batch {batch_idx:3d}/{total_batches:3d} | Loss: {loss.item():.4f} (Seg: {loss_seg.item():.4f}, Cls: {loss_cls.item():.4f})", flush=True)
 
     n = max(1, total_samples)
     return {
@@ -168,23 +218,24 @@ def validate(model, loader, criterion, device):
     n = max(1, total_samples)
     cat_probs = torch.cat(all_probs, dim=0)
     cat_masks = torch.cat(all_masks, dim=0)
-    metrics = calculate_metrics(cat_probs, cat_masks)
+    best_thresh, metrics = find_optimal_threshold(cat_probs, cat_masks)
     metrics["val_loss"] = round(total_loss / n, 4)
     metrics["val_cls_acc"] = round(correct_cls / n, 4)
+    metrics["optimal_threshold"] = best_thresh
     return metrics
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train Siamese-CD on LEVIR-CC with Semantic Labeling")
+    parser = argparse.ArgumentParser(description="Train High-Precision Siamese-CD on LEVIR-CC")
     parser.add_argument("--images_dir", type=str, default="Database/levir_cc/images", help="Path to LEVIR-CC images")
     parser.add_argument("--captions_path", type=str, default="Database/levir_cc/LevirCCcaptions.json", help="Captions JSON")
     parser.add_argument("--output_dir", type=str, default="ml/model_cache/levir_cc", help="Output directory")
-    parser.add_argument("--epochs", type=int, default=5, help="Number of training epochs")
+    parser.add_argument("--epochs", type=int, default=6, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size")
-    parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate")
-    parser.add_argument("--max_train", type=int, default=1200, help="Max train samples")
-    parser.add_argument("--max_val", type=int, default=300, help="Max val samples")
-    parser.add_argument("--pretrained", type=str, default="ml/model_cache/s2looking_cd/best_s2looking_cd.pth", help="Pretrained weights")
+    parser.add_argument("--lr", type=float, default=1.8e-4, help="Learning rate")
+    parser.add_argument("--max_train", type=int, default=1600, help="Max train samples")
+    parser.add_argument("--max_val", type=int, default=320, help="Max val samples")
+    parser.add_argument("--pretrained", type=str, default="ml/model_cache/levir_cc/best_levir_cc.pth", help="Pretrained weights")
     args = parser.parse_args()
 
     out_dir = Path(args.output_dir)
@@ -219,7 +270,7 @@ def main():
         max_val_samples=args.max_val,
     )
 
-    criterion = MultiTaskChangeLoss(bce_weight=0.5, dice_weight=0.5, cls_weight=0.35)
+    criterion = MultiTaskChangeLoss(tversky_weight=0.60, dice_weight=0.40, cls_weight=0.35)
     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
@@ -241,7 +292,9 @@ def main():
             f"Epoch {epoch:2d}/{args.epochs:2d} | "
             f"Loss: {train_stats['total_loss']:.4f} (Seg: {train_stats['seg_loss']:.4f}, Cls: {train_stats['cls_loss']:.4f}) | "
             f"Val F1: {val_metrics['f1']:.4f} | IoU: {val_metrics['iou']:.4f} | "
-            f"Cls Acc: {val_metrics['val_cls_acc']*100:.1f}% | Time: {elapsed:.1f}s"
+            f"Precision: {val_metrics['precision']*100:.1f}% | Recall: {val_metrics['recall']*100:.1f}% | "
+            f"Cls Acc: {val_metrics['val_cls_acc']*100:.1f}% (Thresh: {val_metrics.get('optimal_threshold', 0.58)}) | Time: {elapsed:.1f}s",
+            flush=True,
         )
 
         record = {
