@@ -85,12 +85,16 @@ export const MapContainerWrapper: React.FC<MapContainerWrapperProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>(hasHighlighted ? "highlighted" : "map");
   const [showAnnotations, setShowAnnotations] = useState<boolean>(true);
 
-  // Sync mode if highlighted image becomes available
+  // Sync mode ONLY when a genuinely new scenario/image is loaded (prevents resetting user view mode)
+  const lastActiveScenarioRef = React.useRef<string | undefined>(activeScenarioId);
   React.useEffect(() => {
-    if (highlightedImageUrl || annotatedImageUrl) {
-      setViewMode("highlighted");
+    if (activeScenarioId && activeScenarioId !== lastActiveScenarioRef.current) {
+      lastActiveScenarioRef.current = activeScenarioId;
+      if (highlightedImageUrl || annotatedImageUrl) {
+        setViewMode("highlighted");
+      }
     }
-  }, [highlightedImageUrl, annotatedImageUrl, activeScenarioId]);
+  }, [activeScenarioId, highlightedImageUrl, annotatedImageUrl]);
 
   const activeDisplayImage = showAnnotations
     ? annotatedImageUrl || highlightedImageUrl || postImageUrl

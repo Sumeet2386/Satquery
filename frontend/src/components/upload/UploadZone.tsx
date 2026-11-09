@@ -475,10 +475,17 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
             <span style={{ fontSize: 8, color: "#48b27e" }}>GSD 0.5m</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {REALTIME_BENCHMARK_PAIRS.map((p) => (
+            {REALTIME_BENCHMARK_PAIRS.map((p, idx) => (
               <button
                 key={p.id}
-                onClick={() => onAnalyzeLivePair?.(`/database_samples/${p.id}/pre.png`, `/database_samples/${p.id}/post.png`, p.label)}
+                onClick={() => {
+                  setLivePreFile(null);
+                  setLivePostFile(null);
+                  setPrePreview(null);
+                  setPostPreview(null);
+                  onSelectPreset?.(idx);
+                  onAnalyzeLivePair?.(`/database_samples/${p.id}/pre.png`, `/database_samples/${p.id}/post.png`, p.label);
+                }}
                 style={{
                   display: "flex",
                   alignItems: "center",

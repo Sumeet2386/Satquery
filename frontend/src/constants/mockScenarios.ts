@@ -2176,30 +2176,12 @@ export const MOCK_SCENARIOS: MissionScenario[] = [
 export function matchExplicitScenario(query: string): MissionScenario | null {
   const q = query.toLowerCase().trim();
 
-  if (
-    /^(hi|hello|hey|greetings|hola|good\s*(morning|afternoon|evening)|yo)/i.test(q) ||
-    ["hi", "hello", "hey", "help"].includes(q) ||
-    q.includes("used for") ||
-    q.includes("what is this") ||
-    q.includes("what can you do") ||
-    q.includes("how does this work") ||
-    q.includes("make it real") ||
-    q.includes("distance") ||
-    q.includes("km") ||
-    q.includes("meter") ||
-    q.includes("area") ||
-    q.includes("footprint") ||
-    q.includes("highlight") ||
-    q.includes("overlay")
-  ) {
-    return null;
-  }
-
-  for (let i = 0; i < MOCK_SCENARIOS.length; i++) {
-    const sc = MOCK_SCENARIOS[i];
-    if (sc.keywords.some((k) => q.includes(k.toLowerCase()))) {
-      return sc;
-    }
+  // Match ONLY specific test IDs: e.g. "test_1", "test_10", "test_14", "test_28", "test_42", "test_100", "test_2"
+  const m = q.match(/test[_\s-]?(\d+)/);
+  if (m) {
+    const num = m[1];
+    const target = MOCK_SCENARIOS.find((s) => s.id === `database-test_${num}` || s.id.endsWith(`_${num}`));
+    if (target) return target;
   }
 
   return null;

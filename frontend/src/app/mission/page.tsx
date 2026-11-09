@@ -121,21 +121,25 @@ export default function OdysseusMissionControl() {
     setIsProcessing(true);
 
     // ── 1. Check if user explicitly asked to switch scenarios ──────────────
-    const explicitScenario = matchExplicitScenario(queryText);
+    const qLower = queryText.toLowerCase();
+    const isExplicitSwitchCommand = qLower.includes("switch to") || qLower.includes("load test_") || qLower.includes("open test_");
     let targetScenario = scenario;
 
-    if (explicitScenario) {
-      const targetIdx = MOCK_SCENARIOS.findIndex((s) => s.id === explicitScenario.id);
-      if (targetIdx !== -1 && targetIdx !== currentScenarioIndex) {
-        setCurrentScenarioIndex(targetIdx);
-        targetScenario = explicitScenario;
-        const preFile = explicitScenario.files.find((f) => f.filename.toLowerCase().includes("pre") || f.id.includes("pre") || f.thumbnail_url?.includes("pre"));
-        const postFile = explicitScenario.files.find((f) => f.filename.toLowerCase().includes("post") || f.id.includes("post") || f.thumbnail_url?.includes("post"));
-        const preUrl = preFile?.thumbnail_url || explicitScenario.response.pre_image_url;
-        const postUrl = postFile?.thumbnail_url || explicitScenario.response.post_image_url;
-        if (preUrl && postUrl) {
-          await handleAnalyzeLivePair(preUrl, postUrl, explicitScenario.title);
-          return;
+    if (isExplicitSwitchCommand) {
+      const explicitScenario = matchExplicitScenario(queryText);
+      if (explicitScenario) {
+        const targetIdx = MOCK_SCENARIOS.findIndex((s) => s.id === explicitScenario.id);
+        if (targetIdx !== -1 && targetIdx !== currentScenarioIndex) {
+          setCurrentScenarioIndex(targetIdx);
+          targetScenario = explicitScenario;
+          const preFile = explicitScenario.files.find((f) => f.filename.toLowerCase().includes("pre") || f.id.includes("pre") || f.thumbnail_url?.includes("pre"));
+          const postFile = explicitScenario.files.find((f) => f.filename.toLowerCase().includes("post") || f.id.includes("post") || f.thumbnail_url?.includes("post"));
+          const preUrl = preFile?.thumbnail_url || explicitScenario.response.pre_image_url;
+          const postUrl = postFile?.thumbnail_url || explicitScenario.response.post_image_url;
+          if (preUrl && postUrl) {
+            await handleAnalyzeLivePair(preUrl, postUrl, explicitScenario.title);
+            return;
+          }
         }
       }
     }
@@ -167,7 +171,6 @@ export default function OdysseusMissionControl() {
     let totalAreaM2 = reasoning.totalAreaM2;
 
     // ── 3. Query Backend if Online (for remote sensing queries) ─────────────
-    const qLower = queryText.toLowerCase().trim();
     const isGreetingOrCapability = (
       /^(hi|hello|hey|greetings|hola)\b/i.test(qLower) ||
       ["hi", "hello", "hey"].includes(qLower) ||
@@ -485,7 +488,7 @@ export default function OdysseusMissionControl() {
                 maskImageUrl={latestResponse?.mask_image_url || activeLiveAnalysis?.maskImageUrl || scenario.response.mask_image_url}
                 maxDistKm={latestResponse?.max_dist_km || activeLiveAnalysis?.maxDistKm || scenario.response.max_dist_km}
                 totalAreaM2={latestResponse?.total_area_m2 || activeLiveAnalysis?.totalAreaM2 || scenario.response.total_area_m2}
-                activeScenarioId={activeLiveAnalysis ? "live-imagery" : scenario.id}
+                activeScenarioId={activeLiveAnalysis ? (activeLiveAnalysis.preImageUrl || "live-imagery") : scenario.id}
               />
             </div>
 
