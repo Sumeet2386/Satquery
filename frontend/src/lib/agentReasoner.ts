@@ -44,8 +44,8 @@ export function resolveAgentReasoning(
 
   if (isGreeting) {
     const activeTarget = liveAnalysis
-      ? "your live uploaded bi-temporal image pair"
-      : `the **${currentScenario.title}** preset`;
+      ? "your live analyzed bi-temporal image pair"
+      : `the active satellite observation tile (**${currentScenario.title}**)`;
 
     const answerText = (
       `**Greetings, Commander.** I am **SatQuery AI**, your autonomous multimodal satellite intelligence agent.\n\n` +
@@ -114,8 +114,8 @@ export function resolveAgentReasoning(
 
   if (isCapabilityQuery) {
     const activeTarget = liveAnalysis
-      ? "your uploaded live image pair"
-      : `the **${currentScenario.title}** preset`;
+      ? "your live analyzed bi-temporal image pair"
+      : `the active satellite observation tile (**${currentScenario.title}**)`;
 
     const answerText = (
       `### SatQuery AI: Real-World Purpose & Practical Applications\n\n` +

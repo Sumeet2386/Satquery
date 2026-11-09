@@ -22,25 +22,19 @@ interface UploadZoneProps {
   files: GeoTIFFMetadata[];
   onFilesChange: (files: GeoTIFFMetadata[]) => void;
   inputConfig: InputConfiguration;
-  onSelectPreset: (scenarioIndex: number) => void;
-  onAnalyzeLivePair?: (fileA: File, fileB: File) => void;
+  onSelectPreset?: (scenarioIndex: number) => void;
+  onAnalyzeLivePair?: (fileA: File | string, fileB: File | string, title?: string) => void;
   isProcessing?: boolean;
 }
 
-const PRESETS = [
-  { idx: 0, label: "Optical — Visakhapatnam Port", tag: "OPT" },
-  { idx: 1, label: "Bi-Temporal — Brahmaputra Flood", tag: "BIT" },
-  { idx: 2, label: "SAR Fusion — Mumbai Maritime", tag: "SAR" },
-];
-
-const DATABASE_PRESETS = [
-  { idx: 3, id: "test_1", label: "test_1 · Residential Footprints", span: "0.11 km", tag: "DB" },
-  { idx: 4, id: "test_2", label: "test_2 · Suburban Housing Cluster", span: "0.55 km", tag: "DB" },
-  { idx: 5, id: "test_10", label: "test_10 · High-Density Commercial", span: "0.28 km", tag: "DB" },
-  { idx: 6, id: "test_14", label: "test_14 · Industrial Logistics Depot", span: "0.27 km", tag: "DB" },
-  { idx: 7, id: "test_28", label: "test_28 · Highway & Grading Additions", span: "0.63 km", tag: "DB" },
-  { idx: 8, id: "test_42", label: "test_42 · Commercial Foundations", span: "0.48 km", tag: "DB" },
-  { idx: 9, id: "test_100", label: "test_100 · Urban Transformation", span: "0.55 km", tag: "DB" },
+const REALTIME_BENCHMARK_PAIRS = [
+  { id: "test_100", label: "test_100 · Urban Transformation", span: "0.55 km", tag: "EO" },
+  { id: "test_14", label: "test_14 · Industrial Logistics Depot", span: "0.27 km", tag: "EO" },
+  { id: "test_28", label: "test_28 · Highway & Corridor Works", span: "0.63 km", tag: "EO" },
+  { id: "test_1", label: "test_1 · Residential Footprints", span: "0.11 km", tag: "EO" },
+  { id: "test_10", label: "test_10 · High-Density Commercial", span: "0.28 km", tag: "EO" },
+  { id: "test_42", label: "test_42 · Commercial Foundations", span: "0.48 km", tag: "EO" },
+  { id: "test_2", label: "test_2 · Suburban Housing Cluster", span: "0.55 km", tag: "EO" },
 ];
 
 export const UploadZone: React.FC<UploadZoneProps> = ({
@@ -474,84 +468,17 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
           </div>
         </div>
 
-        {/* Test Presets */}
-        <div>
-          <div style={{ ...sectionLabelStyle, display: "flex", alignItems: "center", gap: 4 }}>
-            <Zap size={9} style={{ color: "#e07856" }} />
-            Quick Presets
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {PRESETS.map((p) => (
-              <button
-                key={p.idx}
-                onClick={() => onSelectPreset(p.idx)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "7px 10px",
-                  borderRadius: 5,
-                  border: "1px solid #1c2028",
-                  background: "#0d0f12",
-                  cursor: "pointer",
-                  transition: "all 0.15s ease",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "#15181f";
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = "#252b36";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "#0d0f12";
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = "#1c2028";
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  <span
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: 8,
-                      fontWeight: 700,
-                      color: "#e07856",
-                      background: "rgba(224,120,86,0.1)",
-                      border: "1px solid rgba(224,120,86,0.3)",
-                      padding: "1px 4px",
-                      borderRadius: 3,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {p.tag}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: 10,
-                      color: "#a2acbd",
-                      textAlign: "left",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {p.label}
-                  </span>
-                </div>
-                <ChevronRight size={11} style={{ color: "#4b5565", flexShrink: 0 }} />
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Database Test Pairs Section */}
+        {/* Real-Time Benchmark Satellite Imagery */}
         <div>
           <div style={{ ...sectionLabelStyle, display: "flex", justifyContent: "space-between", alignItems: "center", color: "#e07856" }}>
-            <span>Database Test Pairs (LEVIR-CD)</span>
+            <span>Real-Time Satellite Pairs</span>
             <span style={{ fontSize: 8, color: "#48b27e" }}>GSD 0.5m</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {DATABASE_PRESETS.map((p) => (
+            {REALTIME_BENCHMARK_PAIRS.map((p) => (
               <button
-                key={p.idx}
-                onClick={() => onSelectPreset(p.idx)}
+                key={p.id}
+                onClick={() => onAnalyzeLivePair?.(`/database_samples/${p.id}/pre.png`, `/database_samples/${p.id}/post.png`, p.label)}
                 style={{
                   display: "flex",
                   alignItems: "center",

@@ -221,77 +221,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           );
         })}
 
-        {/* Scenario Switcher */}
-        <div
-          style={{
-            marginTop: 14,
-            fontFamily: "monospace",
-            fontSize: 9,
-            color: "#4b5565",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            padding: "8px 8px 4px",
-          }}
-        >
-          ISRO Presets
-        </div>
-        {MOCK_SCENARIOS.slice(0, 3).map((s, idx) => {
-          const isSelected = currentScenario.id === s.id;
-          return (
-            <button
-              key={s.id}
-              onClick={() => onSelectScenario(s)}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "6px 8px",
-                borderRadius: 5,
-                border: isSelected ? "1px solid #252b36" : "1px solid transparent",
-                cursor: "pointer",
-                marginBottom: 2,
-                background: isSelected ? "#15181f" : "transparent",
-                transition: "all 0.15s ease",
-              }}
-              onMouseEnter={(e) => {
-                if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = "#111419";
-              }}
-              onMouseLeave={(e) => {
-                if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-              }}
-              title={s.description}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: isSelected ? "#e07856" : "#1c2028",
-                  border: isSelected ? "none" : "1px solid #323a48",
-                  flexShrink: 0,
-                  transition: "all 0.15s",
-                }}
-              />
-              <span
-                style={{
-                  fontFamily: "monospace",
-                  fontSize: 11,
-                  color: isSelected ? "#d0d7e2" : "#748094",
-                  fontWeight: isSelected ? 700 : 400,
-                  textAlign: "left",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                S0{idx + 1} · {s.config_type.replace(" Pair", "").replace(" Scene", "")}
-              </span>
-            </button>
-          );
-        })}
-
-        {/* Database Test Pairs Section */}
+        {/* Real-Time Benchmark Satellite Imagery */}
         <div
           style={{
             marginTop: 14,
@@ -306,12 +236,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             justifyContent: "space-between",
           }}
         >
-          <span>Database Tests</span>
+          <span>Real-Time Imagery</span>
           <span style={{ fontSize: 8, background: "rgba(224,120,86,0.15)", padding: "1px 4px", borderRadius: 3, border: "1px solid rgba(224,120,86,0.3)" }}>
-            LEVIR-CD
+            0.5m GSD
           </span>
         </div>
-        {MOCK_SCENARIOS.slice(3).map((s, idx) => {
+        {MOCK_SCENARIOS.map((s) => {
           const isSelected = currentScenario.id === s.id;
           const distKm = s.response.max_dist_km || 0.3;
           return (

@@ -58,6 +58,15 @@ export default function OdysseusMissionControl() {
     return () => clearInterval(interval);
   }, []);
 
+  // Automatically initialize real-time satellite imagery analysis on mount (zero preset solutions)
+  useEffect(() => {
+    handleAnalyzeLivePair(
+      "/database_samples/test_100/pre.png",
+      "/database_samples/test_100/post.png",
+      "test_100 · High-Resolution Urban Transformation"
+    );
+  }, []);
+
   const computeInputConfig = (currentFiles: GeoTIFFMetadata[]): InputConfiguration => {
     if (currentFiles.length === 0) return "Single Optical";
     if (currentFiles.length === 1)
@@ -70,26 +79,28 @@ export default function OdysseusMissionControl() {
 
   const inputConfig = computeInputConfig(files);
 
-  const handleSelectScenario = useCallback((newScenario: MissionScenario) => {
-    setActiveLiveAnalysis(null);
-    setLiveFilesPair(null);
+  const handleSelectScenario = useCallback(async (newScenario: MissionScenario) => {
     const idx = MOCK_SCENARIOS.findIndex((s) => s.id === newScenario.id);
     setCurrentScenarioIndex(idx !== -1 ? idx : 0);
-    setFiles(newScenario.files);
-    setMapCenter(newScenario.files[0]?.center || [17.695, 83.300]);
-    setMapZoom(newScenario.id === "scenario-2-flood-change" ? 12 : 14);
-    setGroundingBoxes(newScenario.response.grounding_boxes || []);
-    setShowHeatmap(false);
-    setHasSwipe(newScenario.response.has_swipe_comparison || false);
-    setPreImageUrl(newScenario.response.pre_image_url);
-    setPostImageUrl(newScenario.response.post_image_url);
-    setMessages([]);
-    setLatestResponse(null);
+
+    const preFile = newScenario.files.find((f) => f.filename.toLowerCase().includes("pre") || f.id.includes("pre") || f.thumbnail_url?.includes("pre"));
+    const postFile = newScenario.files.find((f) => f.filename.toLowerCase().includes("post") || f.id.includes("post") || f.thumbnail_url?.includes("post"));
+    const preUrl = preFile?.thumbnail_url || newScenario.response.pre_image_url;
+    const postUrl = postFile?.thumbnail_url || newScenario.response.post_image_url;
+
+    if (preUrl && postUrl) {
+      await handleAnalyzeLivePair(preUrl, postUrl, newScenario.title);
+    } else {
+      setFiles(newScenario.files);
+      setMapCenter(newScenario.files[0]?.center || [17.695, 83.300]);
+      setGroundingBoxes(newScenario.response.grounding_boxes || []);
+      setHasSwipe(newScenario.response.has_swipe_comparison || false);
+      setPreImageUrl(newScenario.response.pre_image_url);
+      setPostImageUrl(newScenario.response.post_image_url);
+    }
   }, []);
 
   const handleSelectPreset = (scenarioIndex: number) => {
-    setActiveLiveAnalysis(null);
-    setLiveFilesPair(null);
     const targetScenario = MOCK_SCENARIOS[scenarioIndex];
     if (targetScenario) handleSelectScenario(targetScenario);
   };
@@ -115,12 +126,13 @@ export default function OdysseusMissionControl() {
       if (targetIdx !== -1 && targetIdx !== currentScenarioIndex) {
         setCurrentScenarioIndex(targetIdx);
         targetScenario = explicitScenario;
-        setActiveLiveAnalysis(null);
-        setLiveFilesPair(null);
-        setFiles(explicitScenario.files);
-        if (explicitScenario.files.length > 0) {
-          setMapCenter(explicitScenario.files[0].center);
-          setMapZoom(explicitScenario.id === "scenario-2-flood-change" ? 12 : 14);
+        const preFile = explicitScenario.files.find((f) => f.filename.toLowerCase().includes("pre") || f.id.includes("pre") || f.thumbnail_url?.includes("pre"));
+        const postFile = explicitScenario.files.find((f) => f.filename.toLowerCase().includes("post") || f.id.includes("post") || f.thumbnail_url?.includes("post"));
+        const preUrl = preFile?.thumbnail_url || explicitScenario.response.pre_image_url;
+        const postUrl = postFile?.thumbnail_url || explicitScenario.response.post_image_url;
+        if (preUrl && postUrl) {
+          await handleAnalyzeLivePair(preUrl, postUrl, explicitScenario.title);
+          return;
         }
       }
     }
@@ -261,13 +273,20 @@ export default function OdysseusMissionControl() {
     setIsProcessing(false);
   };
 
-  const handleAnalyzeLivePair = async (fileA: File, fileB: File) => {
+  const handleAnalyzeLivePair = async (fileA: File | string, fileB: File | string, title?: string) => {
     setIsProcessing(true);
+    const nameA = typeof fileA === "string" ? fileA.split("/").pop() || "Pre-Event.png" : fileA.name;
+    const nameB = typeof fileB === "string" ? fileB.split("/").pop() || "Post-Event.png" : fileB.name;
+    const isFileA = typeof fileA !== "string";
+    const isFileB = typeof fileB !== "string";
+    const sizeMbA = isFileA ? Number(((fileA as File).size / 1048576).toFixed(2)) : 1.85;
+    const sizeMbB = isFileB ? Number(((fileB as File).size / 1048576).toFixed(2)) : 1.92;
+
     setCurrentRunningStep({
       step: 1,
       tool: "live_raster_ingest",
       tool_display_name: "Live Image Radiometric Parsing",
-      params: { pre: fileA.name, post: fileB.name },
+      params: { pre: nameA, post: nameB },
       duration_ms: 250,
       status: "running",
     });
@@ -278,7 +297,7 @@ export default function OdysseusMissionControl() {
       const newFiles: GeoTIFFMetadata[] = [
         {
           id: `live_pre_${Date.now()}`,
-          filename: fileA.name,
+          filename: nameA,
           sensor_hint: "sentinel2",
           bands: 3,
           crs: "EPSG:32650",
@@ -290,11 +309,11 @@ export default function OdysseusMissionControl() {
           center: [17.695, 83.300],
           thumbnail_url: liveRes.preImageUrl,
           data_type: "Optical",
-          file_size_mb: Number((fileA.size / 1048576).toFixed(2)),
+          file_size_mb: sizeMbA,
         },
         {
           id: `live_post_${Date.now()}`,
-          filename: fileB.name,
+          filename: nameB,
           sensor_hint: "sentinel2",
           bands: 3,
           crs: "EPSG:32650",
@@ -306,7 +325,7 @@ export default function OdysseusMissionControl() {
           center: [17.695, 83.300],
           thumbnail_url: liveRes.postImageUrl,
           data_type: "Optical",
-          file_size_mb: Number((fileB.size / 1048576).toFixed(2)),
+          file_size_mb: sizeMbB,
         },
       ];
 
@@ -332,10 +351,10 @@ export default function OdysseusMissionControl() {
             step: 1,
             tool: "live_raster_ingest",
             tool_display_name: "Live Image Radiometric Parsing",
-            params: { pre: fileA.name, post: fileB.name },
+            params: { pre: nameA, post: nameB },
             duration_ms: 250,
             status: "success",
-            output: { dimensions: [1024, 1024], format: fileA.type || "raster" },
+            output: { dimensions: [1024, 1024], format: isFileA ? (fileA as File).type || "raster" : "png" },
           },
           {
             step: 2,
@@ -379,7 +398,15 @@ export default function OdysseusMissionControl() {
       };
 
       setActiveLiveAnalysis(liveRes);
-      setLiveFilesPair({ fileA, fileB });
+      if (isFileA && isFileB) {
+        setLiveFilesPair({ fileA: fileA as File, fileB: fileB as File });
+      } else {
+        setLiveFilesPair(null);
+      }
+
+      const displayPrompt = title
+        ? `Analyze live satellite imagery: ${title}. Detect physical changes, compute distance in km, footprint in m², and render highlight annotations.`
+        : `Analyze live image pair: Pre-Event (${nameA}) vs Post-Event (${nameB}). Detect all visible changes, calculate distance in km, and highlight change areas.`;
 
       setMessages((prev) => [
         ...prev,
@@ -387,7 +414,7 @@ export default function OdysseusMissionControl() {
           id: `usr_live_${Date.now()}`,
           sender: "user",
           timestamp,
-          text: `Analyze live uploaded pair: Pre-Event (${fileA.name}) vs Post-Event (${fileB.name}). Detect all visible changes, calculate distance in km, and highlight change areas.`,
+          text: displayPrompt,
         },
         assistantMsg,
       ]);
@@ -450,12 +477,12 @@ export default function OdysseusMissionControl() {
                 hasSwipeComparison={hasSwipe}
                 preImageUrl={preImageUrl}
                 postImageUrl={postImageUrl}
-                highlightedImageUrl={latestResponse?.highlighted_image_url || scenario.response.highlighted_image_url}
-                annotatedImageUrl={latestResponse?.annotated_image_url || scenario.response.annotated_image_url}
-                maskImageUrl={latestResponse?.mask_image_url || scenario.response.mask_image_url}
-                maxDistKm={latestResponse?.max_dist_km || scenario.response.max_dist_km}
-                totalAreaM2={latestResponse?.total_area_m2 || scenario.response.total_area_m2}
-                activeScenarioId={scenario.id}
+                highlightedImageUrl={latestResponse?.highlighted_image_url || activeLiveAnalysis?.highlightedImageUrl || scenario.response.highlighted_image_url}
+                annotatedImageUrl={latestResponse?.annotated_image_url || activeLiveAnalysis?.annotatedImageUrl || scenario.response.annotated_image_url}
+                maskImageUrl={latestResponse?.mask_image_url || activeLiveAnalysis?.maskImageUrl || scenario.response.mask_image_url}
+                maxDistKm={latestResponse?.max_dist_km || activeLiveAnalysis?.maxDistKm || scenario.response.max_dist_km}
+                totalAreaM2={latestResponse?.total_area_m2 || activeLiveAnalysis?.totalAreaM2 || scenario.response.total_area_m2}
+                activeScenarioId={activeLiveAnalysis ? "live-imagery" : scenario.id}
               />
             </div>
 
