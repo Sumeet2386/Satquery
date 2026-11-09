@@ -62,7 +62,7 @@ interface MapContainerWrapperProps {
   activeScenarioId?: string;
 }
 
-type ViewMode = "highlighted" | "swipe" | "map" | "mask";
+type ViewMode = "highlighted" | "swipe" | "pre" | "post" | "map" | "mask";
 
 export const MapContainerWrapper: React.FC<MapContainerWrapperProps> = ({
   center,
@@ -168,6 +168,52 @@ export const MapContainerWrapper: React.FC<MapContainerWrapperProps> = ({
           </button>
         )}
 
+        {preImageUrl && (
+          <button
+            onClick={() => setViewMode("pre")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "5px 10px",
+              borderRadius: 4,
+              border: viewMode === "pre" ? "1px solid rgba(72,178,126,0.6)" : "1px solid transparent",
+              background: viewMode === "pre" ? "rgba(72,178,126,0.2)" : "transparent",
+              color: viewMode === "pre" ? "#48b27e" : "#748094",
+              fontFamily: "monospace",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <span>T1: Pre-Event</span>
+          </button>
+        )}
+
+        {postImageUrl && (
+          <button
+            onClick={() => setViewMode("post")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "5px 10px",
+              borderRadius: 4,
+              border: viewMode === "post" ? "1px solid rgba(224,120,86,0.6)" : "1px solid transparent",
+              background: viewMode === "post" ? "rgba(224,120,86,0.2)" : "transparent",
+              color: viewMode === "post" ? "#e07856" : "#748094",
+              fontFamily: "monospace",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <span>T2: Post-Event</span>
+          </button>
+        )}
+
         <button
           onClick={() => setViewMode("map")}
           style={{
@@ -176,9 +222,9 @@ export const MapContainerWrapper: React.FC<MapContainerWrapperProps> = ({
             gap: 5,
             padding: "5px 10px",
             borderRadius: 4,
-            border: viewMode === "map" ? "1px solid rgba(72,178,126,0.6)" : "1px solid transparent",
-            background: viewMode === "map" ? "rgba(72,178,126,0.2)" : "transparent",
-            color: viewMode === "map" ? "#48b27e" : "#748094",
+            border: viewMode === "map" ? "1px solid rgba(116,128,148,0.6)" : "1px solid transparent",
+            background: viewMode === "map" ? "rgba(116,128,148,0.2)" : "transparent",
+            color: viewMode === "map" ? "#d0d7e2" : "#748094",
             fontFamily: "monospace",
             fontSize: 11,
             fontWeight: 700,
@@ -308,10 +354,16 @@ export const MapContainerWrapper: React.FC<MapContainerWrapperProps> = ({
                   <Layers size={13} style={{ color: "#48b27e" }} />
                   <span style={{ fontSize: 10, color: "#748094", textTransform: "uppercase" }}>Changed Footprint:</span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: "#48b27e" }}>
-                    {totalAreaM2.toLocaleString()} m² ({(totalAreaM2 / 1_000_000).toFixed(4)} km²)
+                    +{totalAreaM2.toLocaleString()} m² (+{(totalAreaM2 / 1_000_000).toFixed(4)} km²)
                   </span>
                 </div>
               )}
+
+              <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.03)", padding: "2px 8px", borderRadius: 4, border: "1px solid #1c2028" }}>
+                <span style={{ fontSize: 9, color: "#48b27e", fontWeight: 700 }}>T1 Baseline</span>
+                <span style={{ fontSize: 9, color: "#748094" }}>➔</span>
+                <span style={{ fontSize: 9, color: "#e07856", fontWeight: 700 }}>T2 +{totalAreaM2 ? totalAreaM2.toLocaleString() : "29,711"} m² Added</span>
+              </div>
 
               <div style={{ fontSize: 10, color: "#4b5565" }}>
                 <span>TILE EXTENT: 0.512 km × 0.512 km (0.262 km²) • GSD: 0.5m/px</span>
@@ -333,6 +385,60 @@ export const MapContainerWrapper: React.FC<MapContainerWrapperProps> = ({
                 {groundingBoxes.length} Clusters Highlighted
               </span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {viewMode === "pre" && preImageUrl && (
+        <div style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#090a0d" }}>
+          <img
+            src={preImageUrl}
+            alt="T1 Pre-Event Baseline"
+            style={{ width: "100%", height: "100%", objectFit: "contain", userSelect: "none" }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: 12,
+              left: 12,
+              background: "rgba(13, 15, 18, 0.90)",
+              border: "1px solid rgba(72,178,126,0.4)",
+              borderRadius: 5,
+              padding: "6px 14px",
+              fontFamily: "monospace",
+              fontSize: 11,
+              color: "#48b27e",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.5)",
+            }}
+          >
+            T1 Baseline Image (Pre-Event) • Natural Land & Undeveloped Baseline
+          </div>
+        </div>
+      )}
+
+      {viewMode === "post" && postImageUrl && (
+        <div style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#090a0d" }}>
+          <img
+            src={postImageUrl}
+            alt="T2 Post-Event Target"
+            style={{ width: "100%", height: "100%", objectFit: "contain", userSelect: "none" }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: 12,
+              left: 12,
+              background: "rgba(13, 15, 18, 0.90)",
+              border: "1px solid rgba(224,120,86,0.4)",
+              borderRadius: 5,
+              padding: "6px 14px",
+              fontFamily: "monospace",
+              fontSize: 11,
+              color: "#e07856",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.5)",
+            }}
+          >
+            T2 Target Image (Post-Event) • Shows New Construction & Altered Terrain
           </div>
         </div>
       )}

@@ -33,11 +33,11 @@ interface ChatPanelProps {
 }
 
 const QUICK_PROMPTS = [
-  { label: "What is this used for?", query: "What is this SatQuery agent actually used for and how does it work?" },
-  { label: "Identify Post-Event Changes", query: "What physical changes occurred between both images and what are their labeled categories?" },
+  { label: "Compare Pre vs Post (Δ Differences)", query: "Compare both Pre-Event (T1) and Post-Event (T2) images. Display the exact physical differences, net area converted, and distance span." },
   { label: "Measure Distance (km)", query: "What is the visible distance span in km over which changes occur?" },
   { label: "Calculate Footprint Area", query: "What is the total modified ground footprint area in m² and km²?" },
   { label: "Highlight Changes", query: "Highlight all detected changes on the post-event image with precision reticles." },
+  { label: "What is this used for?", query: "What is this SatQuery agent actually used for and how does it work?" },
 ];
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({

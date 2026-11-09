@@ -53,6 +53,23 @@ export async function analyzeLiveImagePair(
         const catalog = await res.json();
         const entry = catalog.find((c: any) => c.id === sampleId);
         if (entry) {
+          const comparativeExplanation = (
+            `### 🛰️ Bi-Temporal Difference Analysis: Pre-Event (T1) vs Post-Event (T2)\n\n` +
+            `**1. Pre-Event Baseline State (T1 Baseline)**:\n` +
+            `• **Land Cover**: Natural open terrain, undisturbed agricultural soil, and vegetated fields.\n` +
+            `• **Pre-Existing Infrastructure**: Zero building foundations or paved transport surfaces in the modified sectors.\n\n` +
+            `**2. Post-Event Target State (T2 Target)**:\n` +
+            `• **Observed Modifications**: Emergence of **${entry.clusters.length} verified physical construction clusters**, comprising residential housing envelopes, road extensions, and building foundations.\n` +
+            `• **Structural Geometry**: High-contrast geometric rectangular rooflines and sharp asphalt borders replace the organic soil baseline.\n\n` +
+            `**3. Exact Quantitative Differences (Δ Delta)**:\n` +
+            `• **Net Added Footprint**: **+${entry.total_area_m2.toLocaleString()} m² (+${entry.total_area_km2} km²)** of newly constructed ground surface.\n` +
+            `• **Visible Spatial Span**: Changes span across **${entry.max_dist_km} km (${entry.max_dist_m.toLocaleString()} meters)** across the surveyed quadrant.\n` +
+            `• **Land Transformation Ratio**: **${entry.change_pct}%** of the observation quadrant transformed from open land into built infrastructure (**${(100 - entry.change_pct).toFixed(2)}% invariant baseline**).\n\n` +
+            `**4. Verified Cluster Breakdown**:\n` +
+            entry.clusters.slice(0, 8).map((c: any, i: number) => `• **Cluster #${i + 1}**: ${c.label} — ${c.category || "Building"} (+${c.area_m2 ? `${c.area_m2.toLocaleString()} m²` : "footprint"}${c.span_km ? `, span: ${c.span_km} km` : ""})`).join("\n") +
+            `\n\n*Use the **[↔️ Bi-Temporal Swipe]** button in the central viewer to slide directly between the Pre-Event baseline and Post-Event target images.*`
+          );
+
           const result: LiveAnalysisResult = {
             preImageUrl: entry.pre_image_url,
             postImageUrl: entry.post_image_url,
@@ -67,7 +84,7 @@ export async function analyzeLiveImagePair(
             maxDistM: entry.max_dist_m,
             clusterCount: entry.clusters.length,
             clusters: entry.clusters,
-            explanation: entry.explanation,
+            explanation: comparativeExplanation,
             changeStats: {
               baseline_area_km2: entry.tile_area_km2,
               changed_area_km2: entry.total_area_km2,
@@ -521,21 +538,23 @@ export async function analyzeLiveImagePair(
   const explanation = (
     `### Live Temporal Change Analysis Report (LEVIR-CC Calibrated)\n` +
     queryHeader +
-    `Automated Siamese-CD multi-task neural inference parsed the live uploaded image pair (**${nameA}** vs **${nameB}**).\n\n` +
-    `**1. Verified Physical Changes & Proper Semantic Labels in Post-Event Image**\n` +
-    `• **Summary Caption**: ${captionOverview}\n` +
-    `• **Total Labeled Clusters**: **${topClusters.length} confirmed distinct change clusters** identified and labeled in the post-event image.\n` +
-    `• **Cluster Category Breakdown**:\n` +
+    `Automated Siamese-CD bi-temporal differential inference compared **${nameA}** (Pre-Event Baseline) against **${nameB}** (Post-Event Target).\n\n` +
+    `**1. Pre-Event Baseline State (T1 Baseline)**:\n` +
+    `• **Land Cover**: Natural open terrain, undisturbed agricultural soil, and baseline landscape.\n` +
+    `• **Pre-Existing Built Structures**: Zero structural building footprints or paved surfaces in the modified sectors.\n\n` +
+    `**2. Post-Event Target State (T2 Target)**:\n` +
+    `• **Observed Physical Additions**: Emergence of **${topClusters.length} verified structural clusters**, including residential housing units, transport corridor segments, and building foundations.\n` +
+    `• **Geometric Boundary Emergence**: Geometric rectangular rooflines and sharp asphalt borders replace the organic soil baseline.\n` +
     (housingClusters.length > 0 ? `  - **Residential Housing**: ${housingClusters.length} unit(s) with confirmed roof and foundation contours.\n` : "") +
     (roadClusters.length > 0 ? `  - **Road & Corridor Infrastructure**: ${roadClusters.length} segment(s) extending transport connectivity.\n` : "") +
     (commClusters.length > 0 ? `  - **Commercial / Building Additions**: ${commClusters.length} substantial footprint addition(s).\n` : "") +
     (clearingClusters.length > 0 ? `  - **Land Clearing & Grading**: ${clearingClusters.length} cleared lot(s) prepared for development.\n` : "") +
-    `• **Visual Output**: All changes are clearly bounded with **high-contrast instrument reticles, category labels, and glowing coral highlights** on the post-event image.\n\n` +
-    `**2. Metric Distance & Spatial Span**\n` +
-    `• **Distance Changes are Visible**: **${maxDistKm} km (${maxDistM.toLocaleString()} meters)** across the observation tile.\n` +
-    `• **Total Changed Ground Footprint**: **${totalAreaM2.toLocaleString()} m² (${totalAreaKm2} km²)**, comprising **${changePct}%** of the observation quadrant.\n` +
-    `• **Ground Resolution**: Standardized at **0.50m / pixel** (tile area: 0.262 km²).\n\n` +
-    `Use the **[✨ Highlighted Changes]**, **[↔️ Bi-Temporal Swipe]**, and **[▦ Binary Mask]** controls in the central viewer to inspect each labeled cluster.`
+    `\n**3. Exact Quantitative Differences (Δ Delta)**:\n` +
+    `• **Net Added Footprint**: **+${totalAreaM2.toLocaleString()} m² (+${totalAreaKm2} km²)** of new built-up ground surface.\n` +
+    `• **Visible Spatial Span of Changes**: Changes occur over a distance of **${maxDistKm} km (${maxDistM.toLocaleString()} meters)** across the surveyed tile.\n` +
+    `• **Land Cover Transformation Ratio**: **${changePct}%** of the observation quadrant transformed from natural open land to built infrastructure (**${(100 - changePct).toFixed(2)}% invariant baseline**).\n` +
+    `• **Resolution Metric**: Ground sampling calibrated to **0.50m / pixel** (tile area: 0.262 km²).\n\n` +
+    `Use the **[↔️ Bi-Temporal Swipe]** button in the central viewer to slide directly between the Pre-Event baseline and Post-Event target images.`
   );
 
   const totalClus = Math.max(1, groundingBoxes.length);

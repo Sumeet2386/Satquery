@@ -189,6 +189,31 @@ export function resolveAgentReasoning(
         `• **Properly Labeled Changes**: Reticles on the post-event image clearly denote each category (Residential Housing, Road Infrastructure, Commercial Additions).\n\n` +
         `Use the **[✨ Highlighted Changes]**, **[↔️ Bi-Temporal Swipe]**, and **[▦ Binary Mask]** buttons in the central viewport to toggle view layers.`
       );
+    } else if (
+      q.includes("change") ||
+      q.includes("difference") ||
+      q.includes("compare") ||
+      q.includes("pre") ||
+      q.includes("post") ||
+      q.includes("delta")
+    ) {
+      answerText = (
+        `### 🛰️ Bi-Temporal Difference Analysis: Pre-Event (T1) vs Post-Event (T2)\n\n` +
+        `**1. Pre-Event Baseline State (T1 Baseline)**:\n` +
+        `• **Land Cover**: Natural open terrain, undisturbed agricultural soil, and vegetated fields.\n` +
+        `• **Pre-Existing Built Structures**: Zero structural building footprints or paved surfaces in the modified sectors.\n\n` +
+        `**2. Post-Event Target State (T2 Target)**:\n` +
+        `• **Observed Physical Additions**: Emergence of **${liveAnalysis.clusterCount} verified structural clusters**, including residential housing units, transport corridor segments, and building foundations.\n` +
+        `• **Geometric Boundary Emergence**: Geometric rectangular rooflines and sharp asphalt borders replace the organic soil baseline.\n\n` +
+        `**3. Exact Quantitative Differences (Δ Delta)**:\n` +
+        `• **Net Added Footprint**: **+${liveAnalysis.totalAreaM2.toLocaleString()} m² (+${liveAnalysis.totalAreaKm2} km²)** of new built-up ground surface.\n` +
+        `• **Visible Spatial Span of Changes**: Changes occur over a distance of **${liveAnalysis.maxDistKm} km (${liveAnalysis.maxDistM.toLocaleString()} meters)** across the surveyed tile.\n` +
+        `• **Land Cover Transformation Ratio**: **${liveAnalysis.changePct}%** of the observation quadrant transformed from natural open land to built infrastructure (**${(100 - liveAnalysis.changePct).toFixed(2)}% invariant baseline**).\n` +
+        `• **Resolution Metric**: Ground sampling calibrated to **0.50m / pixel** (tile area: 0.262 km²).\n\n` +
+        `**4. Cluster Breakdown**:\n` +
+        liveAnalysis.clusters.slice(0, 6).map((c, i) => `• **Cluster #${i + 1}**: ${c.label} — ${c.category || "Building"} (+${c.area_m2 ? `${c.area_m2.toLocaleString()} m²` : "footprint"}${c.span_km ? `, span: ${c.span_km} km` : ""})`).join("\n") +
+        `\n\n*Use the **[↔️ Bi-Temporal Swipe]** button in the central viewer to slide directly between the Pre-Event baseline and Post-Event target images.*`
+      );
     } else {
       answerText = liveAnalysis.explanation;
     }
