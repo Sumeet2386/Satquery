@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { SidebarNav, NavSection } from "../../components/Navigation/SidebarNav";
 import { UploadZone } from "../../components/upload/UploadZone";
 import { MapContainerWrapper } from "../../components/map/MapContainerWrapper";
@@ -59,7 +59,10 @@ export default function OdysseusMissionControl() {
   }, []);
 
   // Automatically initialize real-time satellite imagery analysis on mount (zero preset solutions)
+  const isInitialMounted = useRef(false);
   useEffect(() => {
+    if (isInitialMounted.current) return;
+    isInitialMounted.current = true;
     handleAnalyzeLivePair(
       "/database_samples/test_100/pre.png",
       "/database_samples/test_100/post.png",
@@ -335,7 +338,7 @@ export default function OdysseusMissionControl() {
       setGroundingBoxes(liveRes.clusters);
       setHasSwipe(true);
 
-      const responseId = `asst_live_${Date.now()}`;
+      const responseId = `asst_live_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       const timestamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
       const assistantMsg: AssistantResponse = {
@@ -408,10 +411,10 @@ export default function OdysseusMissionControl() {
         ? `Analyze live satellite imagery: ${title}. Detect physical changes, compute distance in km, footprint in m², and render highlight annotations.`
         : `Analyze live image pair: Pre-Event (${nameA}) vs Post-Event (${nameB}). Detect all visible changes, calculate distance in km, and highlight change areas.`;
 
-      setMessages((prev) => [
-        ...prev,
+      const userMsgId = `usr_live_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      setMessages([
         {
-          id: `usr_live_${Date.now()}`,
+          id: userMsgId,
           sender: "user",
           timestamp,
           text: displayPrompt,

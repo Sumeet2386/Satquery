@@ -224,10 +224,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             </div>
           </div>
         ) : (
-          messages.map((msg) => {
+          messages.map((msg, idx) => {
+            const itemKey = `${msg.id || "msg"}_${idx}`;
             if (msg.sender === "user") {
               return (
-                <div key={msg.id} style={{ display: "flex", justifyContent: "flex-end" }}>
+                <div key={itemKey} style={{ display: "flex", justifyContent: "flex-end" }}>
                   <div
                     style={{
                       background: "#15181f",
@@ -287,7 +288,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               THEME_CONFIG.confidenceBadges.HIGH;
 
             return (
-              <div key={asstMsg.id} style={{ display: "flex", flexDirection: "column" }}>
+              <div key={itemKey} style={{ display: "flex", flexDirection: "column" }}>
                 <div
                   style={{
                     background: "#111419",
