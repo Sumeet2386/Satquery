@@ -32,7 +32,9 @@ export interface GroundingBox {
   bbox: [number, number, number, number]; // [minLat, minLng, maxLat, maxLng]
   category: "vessel" | "aircraft" | "infrastructure" | "flood" | "vegetation" | "urban" | "anomaly" | "building";
   span_km?: number;
+  span_m?: number;
   area_m2?: number;
+  bbox_px?: [number, number, number, number];
   attributes?: Record<string, string | number>;
 }
 

@@ -10,6 +10,7 @@ import {
   Radio,
   Loader2,
   Satellite,
+  Settings2,
 } from "lucide-react";
 import {
   ChatMessage,
@@ -21,6 +22,135 @@ import {
 import { THEME_CONFIG } from "../../constants/theme";
 import { ExecutionTrace } from "./ExecutionTrace";
 import { ChatComposer } from "./ChatComposer";
+import { LLMClientConfig } from "../../lib/llmConfig";
+
+function renderInlineMarkdown(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={idx} style={{ color: "#e5eaf2", fontWeight: 700 }}>
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code
+          key={idx}
+          style={{
+            fontFamily: "monospace",
+            fontSize: 11,
+            background: "#15181f",
+            border: "1px solid #252b36",
+            borderRadius: 3,
+            padding: "1px 4px",
+            color: "#e07856",
+          }}
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <React.Fragment key={idx}>{part}</React.Fragment>;
+  });
+}
+
+const MarkdownMessage: React.FC<{ content: string }> = ({ content }) => {
+  const lines = content.split("\n");
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Markdown table detection
+    if (line.trim().startsWith("|") && i + 1 < lines.length && lines[i + 1].trim().startsWith("|") && lines[i + 1].includes("---")) {
+      const headers = line.split("|").slice(1, -1).map((h) => h.trim());
+      i += 2; // skip header and separator
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        rows.push(lines[i].split("|").slice(1, -1).map((c) => c.trim()));
+        i++;
+      }
+      blocks.push(
+        <div key={`tbl_${i}`} style={{ overflowX: "auto", margin: "6px 0" }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontFamily: "monospace",
+              fontSize: 10.5,
+              border: "1px solid #1c2028",
+            }}
+          >
+            <thead>
+              <tr style={{ background: "#15181f", borderBottom: "1px solid #252b36" }}>
+                {headers.map((h, hi) => (
+                  <th key={hi} style={{ textAlign: "left", padding: "5px 7px", color: "#e07856", fontWeight: 700 }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, ri) => (
+                <tr key={ri} style={{ borderBottom: "1px solid #1c2028", background: ri % 2 === 0 ? "#0d0f12" : "#111419" }}>
+                  {r.map((cell, ci) => (
+                    <td key={ci} style={{ padding: "4px 7px", color: "#a2acbd" }}>
+                      {renderInlineMarkdown(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    if (line.startsWith("### ")) {
+      blocks.push(
+        <div key={`h3_${i}`} style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#e5eaf2", marginTop: 6, marginBottom: 4 }}>
+          {renderInlineMarkdown(line.slice(4))}
+        </div>
+      );
+    } else if (line.startsWith("## ")) {
+      blocks.push(
+        <div key={`h2_${i}`} style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: "#e07856", marginTop: 6, marginBottom: 4 }}>
+          {renderInlineMarkdown(line.slice(3))}
+        </div>
+      );
+    } else if (line.startsWith("> ")) {
+      blocks.push(
+        <div
+          key={`bq_${i}`}
+          style={{
+            borderLeft: "2px solid #e07856",
+            paddingLeft: 8,
+            margin: "4px 0",
+            color: "#8e9bb0",
+            fontStyle: "italic",
+          }}
+        >
+          {renderInlineMarkdown(line.slice(2))}
+        </div>
+      );
+    } else if (line.trim() === "") {
+      blocks.push(<div key={`sp_${i}`} style={{ height: 4 }} />);
+    } else {
+      blocks.push(
+        <div key={`ln_${i}`} style={{ lineHeight: 1.55 }}>
+          {renderInlineMarkdown(line)}
+        </div>
+      );
+    }
+    i++;
+  }
+
+  return <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>{blocks}</div>;
+};
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -30,14 +160,16 @@ interface ChatPanelProps {
   currentScenario: MissionScenario;
   onOpenReport: () => void;
   files: GeoTIFFMetadata[];
+  llmConfig?: LLMClientConfig;
+  onOpenSettings?: () => void;
 }
 
 const QUICK_PROMPTS = [
-  { label: "Compare Pre vs Post (Δ Differences)", query: "Compare both Pre-Event (T1) and Post-Event (T2) images. Display the exact physical differences, net area converted, and distance span." },
-  { label: "Measure Distance (km)", query: "What is the visible distance span in km over which changes occur?" },
-  { label: "Calculate Footprint Area", query: "What is the total modified ground footprint area in m² and km²?" },
-  { label: "Highlight Changes", query: "Highlight all detected changes on the post-event image with precision reticles." },
-  { label: "What is this used for?", query: "What is this SatQuery agent actually used for and how does it work?" },
+  { label: "Compare Pre vs Post (Δ)", query: "Compare both Pre-Event (T1) and Post-Event (T2) images. Display the exact physical differences, net area converted, and distance span." },
+  { label: "Statistical Audit", query: "Provide a complete statistical audit including mean, median, standard deviation, IQR, nearest-neighbor spacing, and category breakdown." },
+  { label: "Quadrant Distribution", query: "Break down the spatial quadrant distribution (North-West, North-East, South-West, South-East) of detected changes." },
+  { label: "Rank Largest Clusters", query: "Rank the top 5 largest detected change clusters with area, span, quadrant, and confidence." },
+  { label: "Model & Radiometrics", query: "Analyze model reliability (F1, IoU, recall, confidence) and radiometric pixel/luminance shifts between T1 and T2." },
 ];
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -48,8 +180,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   currentScenario,
   onOpenReport,
   files,
+  llmConfig,
+  onOpenSettings,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const isExternalLlm = Boolean(
+    llmConfig &&
+      llmConfig.provider !== "statistical" &&
+      (llmConfig.api_key || llmConfig.provider === "ollama")
+  );
+  const engineBadge = isExternalLlm
+    ? `${llmConfig!.provider.toUpperCase()}`
+    : "STATS ENGINE";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -91,13 +234,37 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             Conversational Agent
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {onOpenSettings && (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              title="Configure Real-World LLM / Agent Engine"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "3px 7px",
+                borderRadius: 4,
+                border: isExternalLlm ? "1px solid rgba(72,178,126,0.45)" : "1px solid #252b36",
+                background: isExternalLlm ? "rgba(72,178,126,0.1)" : "#15181f",
+                color: isExternalLlm ? "#48b27e" : "#748094",
+                fontFamily: "monospace",
+                fontSize: 9,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              <Settings2 size={10} />
+              <span>{engineBadge}</span>
+            </button>
+          )}
           <span
             style={{
               width: 6,
               height: 6,
               borderRadius: "50%",
-              background: isProcessing ? "#e07856" : "#323a48",
+              background: isProcessing ? "#e07856" : "#48b27e",
               display: "inline-block",
               animation: isProcessing ? "pulse 1.5s ease-in-out infinite" : "none",
             }}
@@ -111,7 +278,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               letterSpacing: "0.06em",
             }}
           >
-            {isProcessing ? "running" : "idle"}
+            {isProcessing ? "running" : "ready"}
           </span>
         </div>
       </div>
@@ -372,10 +539,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                       fontSize: 12,
                       color: "#a2acbd",
                       lineHeight: 1.65,
-                      whiteSpace: "pre-line",
                     }}
                   >
-                    {asstMsg.text}
+                    <MarkdownMessage content={asstMsg.text} />
                   </div>
 
                   {/* SAR Fusion Notice */}

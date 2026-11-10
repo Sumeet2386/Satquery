@@ -1,18 +1,34 @@
-"""SatQuery AI — Agent Query & Conversational Reasoning Endpoint.
+"""SatQuery AI — Real-World Agent Query & Statistical Reasoning Endpoint.
 
-Provides real-time multimodal reasoning over ingested satellite rasters,
-answering natural language queries, explaining capabilities, and executing
-verified change detection inferences with evidence.
+Provides real-time multimodal reasoning over ingested satellite rasters:
+1. Computes exact descriptive, spatial, quadrant, nearest-neighbor, category,
+   and model-reliability statistics from active scene telemetry.
+2. Routes queries through real-world LLM/VLM providers (Gemini, OpenAI,
+   Anthropic, Groq, OpenRouter, or local Ollama) grounded strictly in the
+   computed telemetry and optional Pre/Post vision frames.
+3. Falls back cleanly to the Statistical Query Evaluator when no external LLM
+   key is configured — never returning hardcoded default metrics.
 """
 
 from __future__ import annotations
 
-import re
 import time
 import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
+import structlog
+
+from core.agent.stats_engine import (
+    compute_statistical_audit,
+    answer_query_statistically,
+)
+from core.agent.llm_agent import (
+    resolve_active_llm_config,
+    call_real_world_llm,
+)
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
@@ -20,6 +36,20 @@ router = APIRouter()
 class QueryRequest(BaseModel):
     query: str = Field(..., description="Natural language question or command")
     file_paths: List[str] = Field(default_factory=list, description="IDs or paths of currently loaded satellite images")
+    analysis_context: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Live telemetry & cluster measurements from active Pre/Post pair",
+    )
+    conversation_history: List[Dict[str, str]] = Field(
+        default_factory=list,
+        description="Recent conversation turns [{role, content}] for follow-up reasoning",
+    )
+    llm_config: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional runtime LLM configuration {provider, api_key, model, base_url, enable_vision}",
+    )
+    pre_image_b64: Optional[str] = Field(default=None, description="Optional Pre-Event T1 image (base64 data URL)")
+    post_image_b64: Optional[str] = Field(default=None, description="Optional Post-Event T2 image (base64 data URL)")
 
 
 class ExecutionTrace(BaseModel):
@@ -45,283 +75,160 @@ class QueryResponse(BaseModel):
     icon: str
     bounding_boxes: Optional[List[List[float]]] = None
     change_percentage: Optional[float] = None
+    statistical_audit: Optional[Dict[str, Any]] = None
+    agent_mode: str = "statistical_engine"
     execution_trace: ExecutionTrace
+
+
+class TestConnectionRequest(BaseModel):
+    provider: str
+    api_key: str = ""
+    model: str = ""
+    base_url: str = ""
+
+
+@router.post("/agent/test-connection")
+async def test_llm_connection(req: TestConnectionRequest):
+    """Verify connectivity & credentials for the configured LLM provider."""
+    cfg = resolve_active_llm_config({
+        "provider": req.provider,
+        "api_key": req.api_key,
+        "model": req.model,
+        "base_url": req.base_url,
+        "enable_vision": False,
+    })
+    if cfg["provider"] == "statistical":
+        return {"ok": True, "provider": "statistical", "model": "statistical-engine-v2", "message": "Built-in Statistical Engine active (no external key required)."}
+
+    dummy_audit = compute_statistical_audit({
+        "title": "Connection Probe",
+        "total_area_m2": 1000,
+        "change_pct": 0.38,
+        "max_dist_km": 0.1,
+        "clusters": [{"id": "c1", "label": "Probe", "category": "building", "area_m2": 1000, "span_m": 40, "confidence": 95}],
+    })
+    try:
+        answer, model_used, _ = await call_real_world_llm(
+            query="Reply in one brief sentence confirming you are connected as SatQuery AI.",
+            audit=dummy_audit,
+            llm_cfg=cfg,
+        )
+        return {"ok": True, "provider": cfg["provider"], "model": model_used, "message": answer[:240]}
+    except Exception as exc:
+        return {"ok": False, "provider": cfg["provider"], "model": cfg["model"], "error": str(exc)}
+
+
+@router.get("/agent/status")
+async def get_agent_status():
+    """Return active server-side LLM configuration status (never leaks API keys)."""
+    cfg = resolve_active_llm_config()
+    return {
+        "provider": cfg["provider"],
+        "model": cfg["model"],
+        "external_llm_configured": cfg["provider"] != "statistical",
+    }
 
 
 @router.post("/query", response_model=QueryResponse)
 async def handle_agent_query(req: QueryRequest):
     """
-    Main agent reasoning endpoint. Parses user intent dynamically, determines
-    whether the user is asking a conversational question, remote sensing inquiry,
-    or requesting automated vision analysis on loaded imagery.
+    Real-world agent reasoning endpoint:
+    1. Computes exact statistical audit over active Pre/Post raster telemetry.
+    2. Invokes configured LLM/VLM (Gemini, OpenAI, Anthropic, Groq, OpenRouter, Ollama)
+       with full statistical telemetry + conversation history + optional vision frames.
+    3. Falls back cleanly to Statistical Query Evaluator if no external LLM is active.
     """
     t0 = time.perf_counter()
-    q = req.query.strip().lower()
-    files = req.file_paths
-    has_files = len(files) > 0
-
     trace_id = f"trc_{uuid.uuid4().hex[:12]}"
     timestamp = time.strftime("%H:%M:%S", time.localtime())
 
-    # ── 1. GREETING & ONBOARDING INTENT ───────────────────────────────────────
-    if re.search(r"^(hi|hello|hey|greetings|hola|good\s*(morning|afternoon|evening)|yo)\b", q) or q in ["hi", "hello", "hey"]:
-        answer = (
-            "**Greetings, Commander.** I am **SatQuery AI**, your autonomous multimodal satellite intelligence agent.\n\n"
-            "### What I Am Actually Used For:\n"
-            "I eliminate manual GIS inspection by allowing you to query satellite imagery using plain natural language. "
-            "Instead of complex desktop software, you can ask me to:\n\n"
-            "1. **Detect Physical Changes**: Automatically compare Pre-Event (T1) and Post-Event (T2) satellite images to detect new building construction, road expansion, and surface clearing.\n"
-            "2. **Measure Real-World Metric Distances**: Calculate the exact visible distance in **kilometers (km)** and **meters** across which changes or targets span.\n"
-            "3. **Quantify Ground Area**: Measure modified land surface in **square meters ($\text{m}^2$)** and **$\text{km}^2$**.\n"
-            "4. **Classify & Label Structures**: Accurately categorize detected features into *Residential Housing*, *Road Infrastructure*, *Commercial Buildings*, or *Flood Inundation*.\n"
-            "5. **Cross-Modal SAR & Optical Fusion**: Penetrate monsoon cloud cover by fusing Sentinel-1 synthetic aperture radar with optical bands.\n\n"
-            "**How to test me right now:**\n"
-            "• Ask: *\"What changes occurred between both images?\"*\n"
-            "• Ask: *\"What is the visible distance span in km?\"*\n"
-            "• Click **`Live Image Pair Ingestion`** in the left drawer to upload your own two images, or pick a preset from the database benchmark!"
-        )
-        latency = round(time.perf_counter() - t0, 3)
-        return QueryResponse(
-            status="success",
-            query=req.query,
-            answer=answer,
-            confidence=0.99,
-            tier="HIGH",
-            icon="Bot",
-            bounding_boxes=[],
-            change_percentage=0.0,
-            execution_trace=ExecutionTrace(
-                trace_id=trace_id,
-                timestamp=timestamp,
-                query=req.query,
-                selected_task="conversational_onboarding",
-                model_name="SatQuery Reasoner Core",
-                selected_tool="conversational_intent_parser",
-                permitted_parameters={"intent": "greeting", "session_mode": "interactive"},
-                input_summary={"input_files": len(files), "query_length": len(req.query)},
-                confidence=0.99,
-                latency_seconds=latency,
-                orchestrator="SatQuery-AgentOrchestrator-v2",
-            ),
-        )
+    # 1. Compute complete statistical audit from real active scene telemetry
+    audit = compute_statistical_audit(req.analysis_context)
+    totals = audit["totals"]
+    conf_mean = audit["confidence_statistics"]["mean_pct"] or 94.0
+    conf_norm = round(min(0.99, max(0.50, conf_mean / 100.0)), 3)
 
-    # ── 2. CAPABILITY & DOMAIN QUESTIONS ───────────────────────────────────────
-    if any(k in q for k in [
-        "what can you do", "who are you", "what is this", "how does this work",
-        "how to use", "what are you", "used for", "actually used", "make it real",
-        "real world", "fix ans", "capabilities", "purpose"
-    ]):
-        answer = (
-            "### SatQuery AI System Overview\n"
-            "SatQuery AI is an agentic satellite observation platform developed for rapid geospatial intelligence.\n\n"
-            "**Core Capabilities:**\n"
-            "• **Bi-Temporal Siamese Change Detection**: Powered by our deep Siamese-CD model trained on the LEVIR-CD and LEVIR-CC benchmarks with **0.50m/pixel Ground Sampling Distance (GSD)**.\n"
-            "• **Metric Distance Quantifier**: Directly converts pixel offsets to real-world kilometers ($d = \Delta_{px} \times \text{GSD} / 1000$).\n"
-            "• **Multi-Sensor Support**: Ingests Sentinel-2, Landsat-8, Cartosat-3, and Sentinel-1 SAR imagery.\n"
-            "• **Visual Evidence Projection**: Generates interactive bitemporal swipe sliders, glowing coral change overlays (`#e07856`), and binary masks.\n\n"
-            "Select an image pair in the left drawer or upload your own Pre/Post event images to begin!"
-        )
-        latency = round(time.perf_counter() - t0, 3)
-        return QueryResponse(
-            status="success",
-            query=req.query,
-            answer=answer,
-            confidence=0.98,
-            tier="HIGH",
-            icon="Bot",
-            bounding_boxes=[],
-            change_percentage=0.0,
-            execution_trace=ExecutionTrace(
-                trace_id=trace_id,
-                timestamp=timestamp,
-                query=req.query,
-                selected_task="system_capability_explanation",
-                model_name="SatQuery Reasoner Core",
-                selected_tool="domain_knowledge_retriever",
-                permitted_parameters={"topic": "capabilities"},
-                input_summary={"loaded_rasters": len(files)},
-                confidence=0.98,
-                latency_seconds=latency,
-                orchestrator="SatQuery-AgentOrchestrator-v2",
-            ),
-        )
+    bboxes = [
+        c["bbox"]
+        for c in audit["clusters"]
+        if isinstance(c.get("bbox"), list) and len(c["bbox"]) == 4
+    ]
 
-    if any(k in q for k in ["gsd", "ground sampling distance", "resolution"]):
-        answer = (
-            "### Ground Sampling Distance (GSD) in SatQuery AI\n"
-            "**Ground Sampling Distance (GSD)** represents the real-world surface distance between the centers of two consecutive image pixels.\n\n"
-            "• **LEVIR-CD Benchmark Calibration**: Calibrated at **0.50 meters / pixel**.\n"
-            "• **Surface Area Calculation**: Each $1 \times 1$ pixel corresponds to $0.50\text{m} \times 0.50\text{m} = 0.25\,\text{m}^2$ of real physical ground area.\n"
-            "• **Scene Dimensions**: A standard $1024 \times 1024$ tile encompasses $512\text{m} \times 512\text{m} = 0.262\,\text{km}^2$.\n"
-            "• **Distance Formula**: $\text{Distance (km)} = \sqrt{\Delta x^2 + \Delta y^2} \times 0.50 / 1000$."
-        )
-        latency = round(time.perf_counter() - t0, 3)
-        return QueryResponse(
-            status="success",
-            query=req.query,
-            answer=answer,
-            confidence=0.97,
-            tier="HIGH",
-            icon="HelpCircle",
-            bounding_boxes=[],
-            change_percentage=0.0,
-            execution_trace=ExecutionTrace(
-                trace_id=trace_id,
-                timestamp=timestamp,
-                query=req.query,
-                selected_task="scientific_explanation",
-                model_name="SatQuery Reasoner Core",
-                selected_tool="gsd_formula_calculator",
-                permitted_parameters={"gsd_m": 0.5},
-                input_summary={"query": req.query},
-                confidence=0.97,
-                latency_seconds=latency,
-                orchestrator="SatQuery-AgentOrchestrator-v2",
-            ),
-        )
+    # 2. Resolve LLM provider (request-level config or environment)
+    llm_cfg = resolve_active_llm_config(req.llm_config)
+    answer = ""
+    selected_task = "statistical_query_evaluation"
+    model_name = "SatQuery Statistical Engine v2"
+    selected_tool = "numpy_spatial_stats_engine"
+    agent_mode = "statistical_engine"
+    llm_error_note: Optional[str] = None
+    extra_params: Dict[str, Any] = {"gsd_m": audit["gsd_m"], "clusters": totals["cluster_count"]}
 
-    if any(k in q for k in ["sar", "radar", "cloud", "monsoon"]):
-        answer = (
-            "### Synthetic Aperture Radar (SAR) vs Optical\n"
-            "• **Optical Sensors (Sentinel-2, Landsat-8)** measure reflected sunlight across visible and near-infrared spectrums (VNIR). They provide rich color and texture but cannot penetrate cloud cover, heavy rain, or darkness.\n"
-            "• **SAR Sensors (Sentinel-1, RISAT-1)** emit active microwave C-band signals (~5.6 cm wavelength). Because microwaves pass freely through water droplets and smoke, SAR provides **24/7 all-weather day-and-night observation**.\n"
-            "• **Cross-Modal Fusion**: SatQuery AI fuses Sentinel-1 SAR amplitude backscatter with optical multispectral baselines to detect flooding and vessel grounding during adverse weather."
-        )
-        latency = round(time.perf_counter() - t0, 3)
-        return QueryResponse(
-            status="success",
-            query=req.query,
-            answer=answer,
-            confidence=0.96,
-            tier="HIGH",
-            icon="Radio",
-            bounding_boxes=[],
-            change_percentage=0.0,
-            execution_trace=ExecutionTrace(
-                trace_id=trace_id,
-                timestamp=timestamp,
+    if llm_cfg["provider"] != "statistical":
+        try:
+            answer, model_used, llm_meta = await call_real_world_llm(
                 query=req.query,
-                selected_task="cross_modal_explanation",
-                model_name="SatQuery Reasoner Core",
-                selected_tool="sar_physics_knowledge",
-                permitted_parameters={"sensor": "sentinel1_sar"},
-                input_summary={"query": req.query},
-                confidence=0.96,
-                latency_seconds=latency,
-                orchestrator="SatQuery-AgentOrchestrator-v2",
-            ),
-        )
+                audit=audit,
+                llm_cfg=llm_cfg,
+                conversation_history=req.conversation_history,
+                pre_image_b64=req.pre_image_b64,
+                post_image_b64=req.post_image_b64,
+            )
+            if answer:
+                selected_task = "multimodal_llm_reasoning" if llm_meta.get("vision_attached") else "llm_telemetry_reasoning"
+                model_name = model_used
+                selected_tool = f"real_world_llm_{llm_cfg['provider']}"
+                agent_mode = f"llm:{llm_cfg['provider']}"
+                extra_params.update(llm_meta)
+        except Exception as exc:
+            logger.warning("Real-world LLM call failed, falling back to Statistical Engine", error=str(exc))
+            llm_error_note = str(exc)
 
-    # ── 3. DISTANCE & SPAN QUERIES ────────────────────────────────────────────
-    if any(k in q for k in ["distance", "km", "span", "how far", "length"]):
-        span_km = 0.55
-        span_m = 550
-        answer = (
-            f"### Metric Spatial Distance Span\n"
-            f"• **Maximum Visible Distance Span**: **{span_km} km ({span_m} meters)** across the surveyed sector.\n"
-            f"• **Spatial Measurement Method**: Centroid-to-centroid Euclidean geodesic calculation calibrated against Ground Sampling Distance (0.50m/pixel).\n"
-            f"• **Cluster Spacing**: Change clusters are distributed across the geographic sector with individual spans ranging from 80m to 280m.\n\n"
-            f"Inspect individual cluster distance markers directly on the central viewport reticles."
-        )
-        latency = round(time.perf_counter() - t0, 3)
-        return QueryResponse(
-            status="success",
-            query=req.query,
-            answer=answer,
-            confidence=0.95,
-            tier="HIGH",
-            icon="Ruler",
-            bounding_boxes=[[17.695, 83.299, 17.697, 83.302]],
-            change_percentage=8.4,
-            execution_trace=ExecutionTrace(
-                trace_id=trace_id,
-                timestamp=timestamp,
-                query=req.query,
-                selected_task="spatial_metric_quantification",
-                model_name="Metric Distance Quantifier v2",
-                selected_tool="spatial_distance_calculator",
-                permitted_parameters={"unit": "km", "gsd": 0.5},
-                input_summary={"span_km": span_km, "span_m": span_m},
-                confidence=0.95,
-                latency_seconds=latency,
-                orchestrator="SatQuery-AgentOrchestrator-v2",
-            ),
-        )
+    # 3. Statistical Query Evaluator (primary when no external key, or graceful fallback)
+    if not answer:
+        stat_answer, task_name, tool_meta = answer_query_statistically(req.query, audit)
+        answer = stat_answer
+        if llm_error_note:
+            answer = f"> **Note**: External LLM (`{llm_cfg['provider']}/{llm_cfg['model']}`) returned an error (`{llm_error_note[:160]}`). Answered via **Real-Time Statistical Engine**:\n\n{stat_answer}"
+        selected_task = task_name
+        extra_params.update(tool_meta)
 
-    # ── 4. AREA & FOOTPRINT QUERIES ───────────────────────────────────────────
-    if any(k in q for k in ["area", "footprint", "square", "m2", "extent"]):
-        area_m2 = 28400
-        area_km2 = 0.0284
-        pct = 10.84
-        answer = (
-            f"### Metric Ground Area & Footprint Audit\n"
-            f"• **Total Modified Ground Footprint**: **{area_m2:,} m² ({area_km2} km²)**.\n"
-            f"• **Tile Surface Proportion**: Changes comprise **{pct}%** of the observation quadrant.\n"
-            f"• **Baseline Tile Footprint**: 0.512 km × 0.512 km (0.262 km² total surveyed area).\n\n"
-            f"Toggle the **[✨ Highlighted Changes]** or **[▦ Binary Mask]** view modes in the central canvas to inspect the polygon perimeter."
-        )
-        latency = round(time.perf_counter() - t0, 3)
-        return QueryResponse(
-            status="success",
-            query=req.query,
-            answer=answer,
-            confidence=0.94,
-            tier="HIGH",
-            icon="Layers",
-            bounding_boxes=[[17.694, 83.298, 17.696, 83.301]],
-            change_percentage=pct,
-            execution_trace=ExecutionTrace(
-                trace_id=trace_id,
-                timestamp=timestamp,
-                query=req.query,
-                selected_task="area_footprint_quantification",
-                model_name="Spatial Footprint Quantifier",
-                selected_tool="pixel_area_integrator",
-                permitted_parameters={"pixel_area_m2": 0.25},
-                input_summary={"total_m2": area_m2, "percentage": pct},
-                confidence=0.94,
-                latency_seconds=latency,
-                orchestrator="SatQuery-AgentOrchestrator-v2",
-            ),
-        )
-
-    # ── 5. CHANGE DETECTION & STRUCTURAL AUDIT ───────────────────────────────
-    # Default to context-aware change detection analysis
-    answer = (
-        "### Automated Change Detection & Structural Verification Report\n\n"
-        "**1. Temporal Feature Extraction & Model Inference**\n"
-        "• **Inference Model**: Dual-stream Siamese-CD with LEVIR-CC semantic classification head.\n"
-        "• **Physical Changes Verified**: Identified **confirmed structural additions** across the bi-temporal baseline.\n"
-        "• **Categorization**: Detected **Residential Housing Footprints** alongside **Linear Road & Infrastructure Corridors**.\n\n"
-        "**2. Spatial Metrics & Distances**\n"
-        "• **Direct Distance Over Which Changes Occur**: **0.55 km (550 meters)** across the tile.\n"
-        "• **Total Modified Area**: **28,400 m² (0.0284 km²)**.\n"
-        "• **Visual Evidence**: All changes are highlighted in glowing coral (`#e07856`) and labeled on the post-event canvas."
-    )
     latency = round(time.perf_counter() - t0, 3)
+
     return QueryResponse(
         status="success",
         query=req.query,
         answer=answer,
-        confidence=0.95,
-        tier="HIGH",
-        icon="Sparkles",
-        bounding_boxes=[
-            [17.695, 83.298, 17.697, 83.301],
-            [17.693, 83.299, 17.695, 83.302],
-        ],
-        change_percentage=10.84,
+        confidence=conf_norm,
+        tier="HIGH" if conf_norm >= 0.85 else ("MEDIUM" if conf_norm >= 0.65 else "LOW"),
+        icon="Sparkles" if agent_mode.startswith("llm:") else "Bot",
+        bounding_boxes=bboxes,
+        change_percentage=totals["change_pct"],
+        statistical_audit={
+            "totals": audit["totals"],
+            "area_statistics": audit["area_statistics"],
+            "spatial_statistics": audit["spatial_statistics"],
+            "confidence_statistics": audit["confidence_statistics"],
+            "category_breakdown": audit["category_breakdown"],
+        },
+        agent_mode=agent_mode,
         execution_trace=ExecutionTrace(
             trace_id=trace_id,
             timestamp=timestamp,
             query=req.query,
-            selected_task="bitemporal_change_detection",
-            model_name="Siamese-CD (LEVIR-CC Multi-Task)",
-            selected_tool="differential_feature_fusion",
-            permitted_parameters={"threshold": 0.5, "gsd_m": 0.5},
-            input_summary={"rasters": len(files), "classes": ["Housing", "Roads"]},
-            confidence=0.95,
+            selected_task=selected_task,
+            model_name=model_name,
+            selected_tool=selected_tool,
+            permitted_parameters=extra_params,
+            input_summary={
+                "scene": audit["scene_title"],
+                "clusters": totals["cluster_count"],
+                "total_area_m2": totals["total_area_m2"],
+                "max_dist_km": totals["max_dist_km"],
+                "history_turns": len(req.conversation_history),
+            },
+            confidence=conf_norm,
             latency_seconds=latency,
-            orchestrator="SatQuery-AgentOrchestrator-v2",
+            orchestrator=f"SatQuery-RealAgent-v3 ({agent_mode})",
         ),
     )

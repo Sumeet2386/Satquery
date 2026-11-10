@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     # AI / LLM
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
+    GOOGLE_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
     EXPLANATION_MODEL: str = "gpt-4o"
 
     # Model Inference

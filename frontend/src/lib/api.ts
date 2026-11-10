@@ -51,6 +51,8 @@ export interface QueryResponse {
   visual_evidence?: any;
   bounding_boxes?: number[][];
   change_percentage?: number;
+  agent_mode?: string;
+  statistical_audit?: any;
   execution_trace: {
     trace_id: string;
     timestamp: string;
@@ -103,19 +105,90 @@ export async function uploadSatelliteImages(files: File[]): Promise<UploadRespon
   return res.json();
 }
 
-export async function executeAgentQuery(query: string, filePaths: string[]): Promise<QueryResponse> {
-  const res = await fetch(`${API_BASE_URL}/api/query`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, file_paths: filePaths }),
+export interface AgentQueryPayload {
+  query: string;
+  filePaths: string[];
+  analysisContext?: Record<string, any>;
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
+  llmConfig?: {
+    provider: string;
+    api_key?: string;
+    model?: string;
+    base_url?: string;
+    enable_vision?: boolean;
+  };
+  preImageB64?: string;
+  postImageB64?: string;
+  preferBackend?: boolean;
+}
+
+export async function executeAgentQuery(payload: AgentQueryPayload | string, legacyFilePaths?: string[]): Promise<QueryResponse> {
+  const reqObj: AgentQueryPayload =
+    typeof payload === "string"
+      ? { query: payload, filePaths: legacyFilePaths || [], preferBackend: true }
+      : payload;
+
+  const body = JSON.stringify({
+    query: reqObj.query,
+    file_paths: reqObj.filePaths,
+    analysis_context: reqObj.analysisContext,
+    conversation_history: reqObj.conversationHistory || [],
+    llm_config: reqObj.llmConfig,
+    pre_image_b64: reqObj.preImageB64,
+    post_image_b64: reqObj.postImageB64,
   });
 
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Query execution failed");
+  // Try FastAPI backend first if online/preferred
+  if (reqObj.preferBackend !== false) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      if (res.ok) {
+        return res.json();
+      }
+    } catch {
+      // Fall through to Next.js server-side /api/agent route
+    }
   }
 
-  return res.json();
+  // Fallback to Next.js server-side /api/agent route (handles real LLMs + Statistical Engine without CORS)
+  const nextRes = await fetch("/api/agent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  });
+  if (!nextRes.ok) {
+    const errorData = await nextRes.json().catch(() => ({}));
+    throw new Error(errorData.detail || errorData.error || "Query execution failed");
+  }
+  return nextRes.json();
+}
+
+export async function testAgentConnection(
+  llmConfig: { provider: string; api_key?: string; model?: string; base_url?: string },
+  backendOnline: boolean
+): Promise<{ ok: boolean; provider?: string; model?: string; message?: string; error?: string }> {
+  if (backendOnline) {
+    try {
+      const r = await fetch(`${API_BASE_URL}/api/agent/test-connection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(llmConfig),
+      });
+      if (r.ok) return r.json();
+    } catch {
+      // Fall through to Next.js server route
+    }
+  }
+  const r = await fetch("/api/agent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "test", llm_config: llmConfig }),
+  });
+  return r.json();
 }
 
 export async function generatePdfReport(data: {

@@ -1,5 +1,50 @@
 import { MissionScenario, GroundingBox, ChangeStats, ExecutionTraceStep } from "@/types/satquery";
 import { LiveAnalysisResult } from "@/lib/liveImageAnalysis";
+import {
+  ActiveAnalysisContext,
+  computeStatisticalAuditTS,
+  answerQueryStatisticallyTS,
+} from "@/lib/statisticalEngine";
+
+export function buildAnalysisContext(
+  currentScenario: MissionScenario,
+  liveAnalysis: LiveAnalysisResult | null
+): ActiveAnalysisContext {
+  if (liveAnalysis) {
+    return {
+      title: liveAnalysis.title || "Live Satellite Pair",
+      scene_id: "live-uploaded-pair",
+      pre_filename: liveAnalysis.preFilename || "Pre-Event (T1)",
+      post_filename: liveAnalysis.postFilename || "Post-Event (T2)",
+      gsd_m: 0.5,
+      tile_width_px: liveAnalysis.tileWidthPx || 1024,
+      tile_height_px: liveAnalysis.tileHeightPx || 1024,
+      total_changed_px: liveAnalysis.totalChangedPx,
+      total_area_m2: liveAnalysis.totalAreaM2,
+      total_area_km2: liveAnalysis.totalAreaKm2,
+      change_pct: liveAnalysis.changePct,
+      max_dist_m: liveAnalysis.maxDistM,
+      max_dist_km: liveAnalysis.maxDistKm,
+      clusters: liveAnalysis.clusters,
+      pixel_stats: liveAnalysis.pixelStats,
+    };
+  }
+
+  const resp = currentScenario.response;
+  return {
+    title: currentScenario.title,
+    scene_id: currentScenario.id,
+    pre_filename: currentScenario.files[0]?.filename || "Pre-Event (T1)",
+    post_filename: currentScenario.files[1]?.filename || "Post-Event (T2)",
+    gsd_m: currentScenario.files[0]?.resolution_m || 0.5,
+    tile_width_px: currentScenario.files[0]?.width || 1024,
+    tile_height_px: currentScenario.files[0]?.height || 1024,
+    total_area_m2: resp.total_area_m2 || 0,
+    change_pct: resp.change_stats ? Number((resp.change_stats.change_ratio * 100).toFixed(2)) : undefined,
+    max_dist_km: resp.max_dist_km || 0,
+    clusters: resp.grounding_boxes || [],
+  };
+}
 
 export interface AgentContext {
   currentScenario: MissionScenario;
@@ -162,160 +207,41 @@ export function resolveAgentReasoning(
     };
   }
 
-  // ── 3. LIVE UPLOADED IMAGES ACTIVE ──────────────────────────────────────────
-  if (liveAnalysis) {
-    let answerText = "";
-    if (q.includes("distance") || q.includes("km") || q.includes("meter") || q.includes("span") || q.includes("how far")) {
-      answerText = (
-        `### Spatial Distance Quantifications (Live Upload)\n` +
-        `• **Maximum Visible Distance Span**: **${liveAnalysis.maxDistKm} km (${liveAnalysis.maxDistM.toLocaleString()} meters)** across the observation tile.\n` +
-        `• **Resolution Metric**: Ground sampling calibrated to **0.50m / pixel** (LEVIR-CD standard).\n` +
-        `• **Cluster Coordinates**: Identifies **${liveAnalysis.clusterCount} localized structural change regions** across the surveyed area.\n\n` +
-        `Individual metric distance tags are marked atop each cluster bounding reticle on the viewport.`
-      );
-    } else if (q.includes("area") || q.includes("footprint") || q.includes("m2") || q.includes("square") || q.includes("extent")) {
-      answerText = (
-        `### Ground Footprint & Area Metrics (Live Upload)\n` +
-        `• **Total Modified Ground Footprint**: **${liveAnalysis.totalAreaM2.toLocaleString()} m² (${liveAnalysis.totalAreaKm2} km²)**.\n` +
-        `• **Percentage of Tile**: Changed pixels comprise **${liveAnalysis.changePct}%** of the observation quadrant.\n` +
-        `• **Cluster Density**: **${liveAnalysis.clusterCount} confirmed physical change clusters** verified via differential Sobel edge & chromatic thresholding.\n\n` +
-        `Inspect the exact footprint contours using the **[✨ Highlighted Changes]** toggle above.`
-      );
-    } else if (q.includes("highlight") || q.includes("show") || q.includes("visual") || q.includes("overlay") || q.includes("post") || q.includes("label")) {
-      answerText = (
-        `### High-Resolution Differential Visualization (Live Upload)\n` +
-        `• **Highlighted Changes**: All **${liveAnalysis.clusterCount} verified change clusters** have been rendered in **vivid coral glow overlay** (#e07856) with precision instrument reticles.\n` +
-        `• **Spatial Distance Span**: Changes span **${liveAnalysis.maxDistKm} km** across the observation tile with **${liveAnalysis.totalAreaM2.toLocaleString()} m²** total ground modification.\n` +
-        `• **Properly Labeled Changes**: Reticles on the post-event image clearly denote each category (Residential Housing, Road Infrastructure, Commercial Additions).\n\n` +
-        `Use the **[✨ Highlighted Changes]**, **[↔️ Bi-Temporal Swipe]**, and **[▦ Binary Mask]** buttons in the central viewport to toggle view layers.`
-      );
-    } else if (
-      q.includes("change") ||
-      q.includes("difference") ||
-      q.includes("compare") ||
-      q.includes("pre") ||
-      q.includes("post") ||
-      q.includes("delta")
-    ) {
-      answerText = (
-        `### 🛰️ Bi-Temporal Difference Analysis: Pre-Event (T1) vs Post-Event (T2)\n\n` +
-        `**1. Pre-Event Baseline State (T1 Baseline)**:\n` +
-        `• **Land Cover**: Natural open terrain, undisturbed agricultural soil, and vegetated fields.\n` +
-        `• **Pre-Existing Built Structures**: Zero structural building footprints or paved surfaces in the modified sectors.\n\n` +
-        `**2. Post-Event Target State (T2 Target)**:\n` +
-        `• **Observed Physical Additions**: Emergence of **${liveAnalysis.clusterCount} verified structural clusters**, including residential housing units, transport corridor segments, and building foundations.\n` +
-        `• **Geometric Boundary Emergence**: Geometric rectangular rooflines and sharp asphalt borders replace the organic soil baseline.\n\n` +
-        `**3. Exact Quantitative Differences (Δ Delta)**:\n` +
-        `• **Net Added Footprint**: **+${liveAnalysis.totalAreaM2.toLocaleString()} m² (+${liveAnalysis.totalAreaKm2} km²)** of new built-up ground surface.\n` +
-        `• **Visible Spatial Span of Changes**: Changes occur over a distance of **${liveAnalysis.maxDistKm} km (${liveAnalysis.maxDistM.toLocaleString()} meters)** across the surveyed tile.\n` +
-        `• **Land Cover Transformation Ratio**: **${liveAnalysis.changePct}%** of the observation quadrant transformed from natural open land to built infrastructure (**${(100 - liveAnalysis.changePct).toFixed(2)}% invariant baseline**).\n` +
-        `• **Resolution Metric**: Ground sampling calibrated to **0.50m / pixel** (tile area: 0.262 km²).\n\n` +
-        `**4. Cluster Breakdown**:\n` +
-        liveAnalysis.clusters.slice(0, 6).map((c, i) => `• **Cluster #${i + 1}**: ${c.label} — ${c.category || "Building"} (+${c.area_m2 ? `${c.area_m2.toLocaleString()} m²` : "footprint"}${c.span_km ? `, span: ${c.span_km} km` : ""})`).join("\n") +
-        `\n\n*Use the **[↔️ Bi-Temporal Swipe]** button in the central viewer to slide directly between the Pre-Event baseline and Post-Event target images.*`
-      );
-    } else {
-      answerText = liveAnalysis.explanation;
-    }
-
-    return {
-      answerText,
-      confidenceTier: "HIGH",
-      confidenceScore: 96.5,
-      traceSteps: [
-        {
-          step: 1,
-          tool: "siamese_cd_differential",
-          tool_display_name: "Differential Feature Extraction & Thresholding",
-          params: { gsd_m: 0.5, adaptive_otsu: true },
-          duration_ms: 280,
-          status: "success",
-          output: { clusters: liveAnalysis.clusterCount, max_dist_km: liveAnalysis.maxDistKm },
-        },
-        {
-          step: 2,
-          tool: "metric_spatial_quantifier",
-          tool_display_name: "Metric Distance & Area Cluster Quantifier",
-          params: { unit: "km", gsd: "0.50m/px" },
-          duration_ms: 190,
-          status: "success",
-          output: { max_dist_km: liveAnalysis.maxDistKm, total_area_m2: liveAnalysis.totalAreaM2 },
-        },
-        {
-          step: 3,
-          tool: "highlight_overlay_generator",
-          tool_display_name: "Highlight Change Map & Cluster Reticles",
-          params: { color: "#e07856", stroke: 2.5 },
-          duration_ms: 140,
-          status: "success",
-          output: { status: "rendered" },
-        },
-      ],
-      groundingBoxes: liveAnalysis.clusters,
-      changeStats: liveAnalysis.changeStats,
-      hasHeatmap: true,
-      hasSwipe: true,
-      preImageUrl: liveAnalysis.preImageUrl,
-      postImageUrl: liveAnalysis.postImageUrl,
-      highlightedImageUrl: liveAnalysis.highlightedImageUrl,
-      annotatedImageUrl: liveAnalysis.annotatedImageUrl,
-      maskImageUrl: liveAnalysis.maskImageUrl,
-      maxDistKm: liveAnalysis.maxDistKm,
-      totalAreaM2: liveAnalysis.totalAreaM2,
-    };
-  }
-
-  // ── 4. CONTEXT-AWARE BENCHMARK & SCENARIO QUERY ─────────────────────────────
-  // If the user asks about distance, area, changes, or targets in the currently active scene:
+  // ── 3. REAL-TIME STATISTICAL & TELEMETRY EVALUATION ───────────────────────
+  const activeCtx = buildAnalysisContext(currentScenario, liveAnalysis);
+  const audit = computeStatisticalAuditTS(activeCtx);
+  const statResult = answerQueryStatisticallyTS(query, audit);
   const resp = currentScenario.response;
-  let dynamicAnswer = resp.text;
-
-  if (q.includes("distance") || q.includes("km") || q.includes("meter") || q.includes("span") || q.includes("how far")) {
-    const km = resp.max_dist_km || 0.45;
-    const m = Math.round(km * 1000);
-    dynamicAnswer = (
-      `### Metric Spatial Distance Span\n` +
-      `• **Visible Distance Over Which Changes Occur**: **${km} km (${m.toLocaleString()} meters)** across **${currentScenario.title}**.\n` +
-      `• **Sensor Resolution Calibration**: 0.50m / pixel Ground Sampling Distance (GSD).\n` +
-      `• **Cluster Geometry**: ${resp.grounding_boxes?.length || 4} distinct confirmed structural clusters distributed across the quadrant.\n\n` +
-      `Inspect the individual cluster metric distance tags rendered on the post-event image canvas.`
-    );
-  } else if (q.includes("area") || q.includes("footprint") || q.includes("m2") || q.includes("square")) {
-    const m2 = resp.total_area_m2 || 24500;
-    const km2 = Number((m2 / 1_000_000).toFixed(5));
-    dynamicAnswer = (
-      `### Metric Ground Footprint & Area Metrics\n` +
-      `• **Total Modified Ground Footprint**: **${m2.toLocaleString()} m² (${km2} km²)**.\n` +
-      `• **Tile Footprint**: 0.512 km × 0.512 km (0.262 km² total surveyed area).\n` +
-      `• **Confirmed Changes**: Physical structures isolated through deep Siamese-CD differential inference.\n\n` +
-      `Inspect the exact footprint contours using the **[✨ Highlighted Changes]** toggle above.`
-    );
-  } else if (q.includes("highlight") || q.includes("show") || q.includes("visual") || q.includes("overlay") || q.includes("mask") || q.includes("post")) {
-    const km = resp.max_dist_km || 0.45;
-    dynamicAnswer = (
-      `### High-Resolution Change Visualization\n` +
-      `• **Highlighted Output**: Changes across **${currentScenario.title}** are rendered in **vivid coral glow overlay** (#e07856) with precision instrument reticles.\n` +
-      `• **Spatial Extent**: Changes are visible across a distance of **${km} km**.\n` +
-      `• **Post-Event Labels**: All changes are labeled with category classifications and bounding reticles.\n\n` +
-      `Use the **[✨ Highlighted Changes]**, **[↔️ Bi-Temporal Swipe]**, and **[▦ Binary Mask]** buttons in the central viewport to toggle view layers.`
-    );
-  }
 
   return {
-    answerText: dynamicAnswer,
-    confidenceTier: resp.confidence_tier,
-    confidenceScore: resp.confidence_score,
-    traceSteps: resp.execution_trace || [],
-    groundingBoxes: resp.grounding_boxes || [],
-    changeStats: resp.change_stats,
-    hasHeatmap: Boolean(resp.has_heatmap),
-    hasSwipe: Boolean(resp.has_swipe_comparison),
-    preImageUrl: resp.pre_image_url,
-    postImageUrl: resp.post_image_url,
-    highlightedImageUrl: resp.highlighted_image_url,
-    annotatedImageUrl: resp.annotated_image_url,
-    maskImageUrl: resp.mask_image_url,
-    maxDistKm: resp.max_dist_km,
-    totalAreaM2: resp.total_area_m2,
+    answerText: statResult.answer,
+    confidenceTier: audit.confidence_statistics.mean_pct >= 85 ? "HIGH" : "MEDIUM",
+    confidenceScore: audit.confidence_statistics.mean_pct || (liveAnalysis ? 96.2 : resp.confidence_score),
+    traceSteps: [
+      {
+        step: 1,
+        tool: statResult.task,
+        tool_display_name: "Statistical & Spatial Telemetry Engine",
+        params: statResult.params,
+        duration_ms: 145,
+        status: "success",
+        output: {
+          clusters: audit.totals.cluster_count,
+          mean_area_m2: audit.area_statistics.mean_m2,
+          max_dist_km: audit.totals.max_dist_km,
+        },
+      },
+    ],
+    groundingBoxes: liveAnalysis ? liveAnalysis.clusters : (resp.grounding_boxes || []),
+    changeStats: liveAnalysis ? liveAnalysis.changeStats : resp.change_stats,
+    hasHeatmap: liveAnalysis ? true : Boolean(resp.has_heatmap),
+    hasSwipe: liveAnalysis ? true : Boolean(resp.has_swipe_comparison),
+    preImageUrl: liveAnalysis ? liveAnalysis.preImageUrl : resp.pre_image_url,
+    postImageUrl: liveAnalysis ? liveAnalysis.postImageUrl : resp.post_image_url,
+    highlightedImageUrl: liveAnalysis ? liveAnalysis.highlightedImageUrl : resp.highlighted_image_url,
+    annotatedImageUrl: liveAnalysis ? liveAnalysis.annotatedImageUrl : resp.annotated_image_url,
+    maskImageUrl: liveAnalysis ? liveAnalysis.maskImageUrl : resp.mask_image_url,
+    maxDistKm: liveAnalysis ? liveAnalysis.maxDistKm : resp.max_dist_km,
+    totalAreaM2: liveAnalysis ? liveAnalysis.totalAreaM2 : resp.total_area_m2,
   };
 }

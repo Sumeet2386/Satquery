@@ -5,8 +5,9 @@ import { SidebarNav, NavSection } from "../../components/Navigation/SidebarNav";
 import { UploadZone } from "../../components/upload/UploadZone";
 import { MapContainerWrapper } from "../../components/map/MapContainerWrapper";
 import { ChatPanel } from "../../components/chat/ChatPanel";
+import { AgentSettingsModal } from "../../components/chat/AgentSettingsModal";
 import { ReportView } from "../../components/report/ReportView";
-import { MOCK_SCENARIOS, findMatchingScenario, matchExplicitScenario } from "../../constants/mockScenarios";
+import { MOCK_SCENARIOS, matchExplicitScenario } from "../../constants/mockScenarios";
 import {
   ChatMessage,
   AssistantResponse,
@@ -19,7 +20,13 @@ import {
 } from "../../types/satquery";
 import { checkBackendHealth, executeAgentQuery } from "../../lib/api";
 import { analyzeLiveImagePair, LiveAnalysisResult } from "../../lib/liveImageAnalysis";
-import { resolveAgentReasoning } from "../../lib/agentReasoner";
+import { resolveAgentReasoning, buildAnalysisContext } from "../../lib/agentReasoner";
+import {
+  LLMClientConfig,
+  loadLLMConfig,
+  saveLLMConfig,
+  imageUrlToCompactBase64,
+} from "../../lib/llmConfig";
 
 export default function OdysseusMissionControl() {
   const [currentScenarioIndex, setCurrentScenarioIndex] = useState<number>(0);
@@ -46,6 +53,18 @@ export default function OdysseusMissionControl() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [currentRunningStep, setCurrentRunningStep] = useState<ExecutionTraceStep | null>(null);
   const [latestResponse, setLatestResponse] = useState<AssistantResponse | null>(null);
+  const [llmConfig, setLlmConfig] = useState<LLMClientConfig>({
+    provider: "statistical",
+    api_key: "",
+    model: "statistical-engine-v2",
+    base_url: "",
+    enable_vision: true,
+  });
+  const [settingsModalOpen, setSettingsModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    setLlmConfig(loadLLMConfig());
+  }, []);
 
   useEffect(() => {
     const probe = async () => {
@@ -112,11 +131,17 @@ export default function OdysseusMissionControl() {
     if (isProcessing) return;
 
     const userMsg: UserMessage = {
-      id: `usr_${Date.now()}`,
+      id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       sender: "user",
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
       text: queryText,
     };
+    const conversationHistory = messages
+      .slice(-8)
+      .map((m) => ({
+        role: m.sender === "assistant" ? ("assistant" as const) : ("user" as const),
+        content: m.text,
+      }));
     setMessages((prev) => [...prev, userMsg]);
     setIsProcessing(true);
 
@@ -146,7 +171,7 @@ export default function OdysseusMissionControl() {
 
     const hasSarFile = files.some((f) => f.data_type === "SAR");
 
-    // ── 2. Run Intelligent Agent Reasoner dynamically ──────────────────────
+    // ── 2. Prepare baseline visual layers & local Statistical Reasoner fallback ─
     const reasoning = resolveAgentReasoning(queryText, {
       currentScenario: targetScenario,
       liveAnalysis: activeLiveAnalysis,
@@ -162,27 +187,48 @@ export default function OdysseusMissionControl() {
     let changeStats = reasoning.changeStats;
     let hasHeatmap = reasoning.hasHeatmap;
     let hasSwipeComp = reasoning.hasSwipe;
-    let preImageUrl = reasoning.preImageUrl;
-    let postImageUrl = reasoning.postImageUrl;
+    let activePreUrl = reasoning.preImageUrl;
+    let activePostUrl = reasoning.postImageUrl;
     let highlightedImageUrl = reasoning.highlightedImageUrl;
     let annotatedImageUrl = reasoning.annotatedImageUrl;
     let maskImageUrl = reasoning.maskImageUrl;
     let maxDistKm = reasoning.maxDistKm;
     let totalAreaM2 = reasoning.totalAreaM2;
 
-    // ── 3. Query Backend if Online (for remote sensing queries) ─────────────
-    const isGreetingOrCapability = (
+    // ── 3. Execute Real-World Agent (FastAPI /api/query -> Next /api/agent) ──
+    const isGreetingOrCapability =
       /^(hi|hello|hey|greetings|hola)\b/i.test(qLower) ||
-      ["hi", "hello", "hey"].includes(qLower) ||
-      qLower.includes("used for") ||
-      qLower.includes("what is this") ||
-      qLower.includes("make it real")
-    );
+      ["hi", "hello", "hey"].includes(qLower);
 
-    if (backendOnline && !isGreetingOrCapability) {
+    const hasExternalLlm =
+      llmConfig.provider !== "statistical" &&
+      (Boolean(llmConfig.api_key) || llmConfig.provider === "ollama");
+
+    if (!isGreetingOrCapability || hasExternalLlm) {
       try {
         const filePaths = files.map((f) => f.id);
-        const liveRes = await executeAgentQuery(queryText, filePaths);
+        const analysisContext = buildAnalysisContext(targetScenario, activeLiveAnalysis);
+
+        let preB64: string | undefined;
+        let postB64: string | undefined;
+        if (hasExternalLlm && llmConfig.enable_vision && activePreUrl && activePostUrl) {
+          [preB64, postB64] = await Promise.all([
+            imageUrlToCompactBase64(activePreUrl, 512),
+            imageUrlToCompactBase64(activePostUrl, 512),
+          ]);
+        }
+
+        const liveRes = await executeAgentQuery({
+          query: queryText,
+          filePaths,
+          analysisContext,
+          conversationHistory,
+          llmConfig,
+          preImageB64: preB64,
+          postImageB64: postB64,
+          preferBackend: backendOnline,
+        });
+
         if (liveRes.status === "success" && liveRes.answer) {
           answerText = liveRes.answer;
           confidenceTier = liveRes.tier as "HIGH" | "MEDIUM" | "LOW";
@@ -206,7 +252,7 @@ export default function OdysseusMissionControl() {
           }
         }
       } catch (err) {
-        console.warn("Live backend query error, using dynamic agent reasoner:", err);
+        console.warn("Agent endpoint fallback to client statistical engine:", err);
       }
     }
 
@@ -218,7 +264,7 @@ export default function OdysseusMissionControl() {
     setCurrentRunningStep(null);
 
     // ── 5. Build and Stream Assistant Response ──────────────────────────────
-    const responseId = `asst_${Date.now()}`;
+    const responseId = `asst_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const timestamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
     const newAssistantResponse: AssistantResponse = {
@@ -235,8 +281,8 @@ export default function OdysseusMissionControl() {
       fusion_note: targetScenario.response.fusion_note,
       has_heatmap: hasHeatmap,
       has_swipe_comparison: hasSwipeComp,
-      pre_image_url: preImageUrl,
-      post_image_url: postImageUrl,
+      pre_image_url: activePreUrl,
+      post_image_url: activePostUrl,
       highlighted_image_url: highlightedImageUrl,
       annotated_image_url: annotatedImageUrl,
       mask_image_url: maskImageUrl,
@@ -269,10 +315,10 @@ export default function OdysseusMissionControl() {
 
     if (boxes) setGroundingBoxes(boxes);
     if (hasHeatmap) setShowHeatmap(true);
-    if (hasSwipeComp && preImageUrl && postImageUrl) {
+    if (hasSwipeComp && activePreUrl && activePostUrl) {
       setHasSwipe(true);
-      setPreImageUrl(preImageUrl);
-      setPostImageUrl(postImageUrl);
+      setPreImageUrl(activePreUrl);
+      setPostImageUrl(activePostUrl);
     }
 
     setLatestResponse({ ...newAssistantResponse, text: answerText });
@@ -502,11 +548,24 @@ export default function OdysseusMissionControl() {
                 currentScenario={scenario}
                 onOpenReport={() => setActiveSection("reports")}
                 files={files}
+                llmConfig={llmConfig}
+                onOpenSettings={() => setSettingsModalOpen(true)}
               />
             </div>
           </div>
         )}
       </div>
+
+      <AgentSettingsModal
+        open={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        config={llmConfig}
+        onSave={(newCfg) => {
+          setLlmConfig(newCfg);
+          saveLLMConfig(newCfg);
+        }}
+        backendOnline={backendOnline}
+      />
     </div>
   );
 }
