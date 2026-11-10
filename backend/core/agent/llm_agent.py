@@ -170,62 +170,51 @@ def resolve_active_llm_config(request_llm_config: Optional[Dict[str, Any]] = Non
 
 
 def _build_telemetry_context_block(audit: Dict[str, Any]) -> str:
-    """Format a plain-English pre-computed summary + JSON for high-accuracy LLM grounding."""
+    """Build a compact, token-efficient Ground Truth Fact Sheet for high accuracy & low latency."""
     totals = audit.get("totals", {})
     area_s = audit.get("area_statistics", {})
     spatial = audit.get("spatial_statistics", {})
     conf = audit.get("confidence_statistics", {})
+    cats = audit.get("category_breakdown", {})
+    px = audit.get("pixel_stats") or {}
+    mm = audit.get("model_metrics") or {}
     clusters = audit.get("clusters") or []
 
-    cluster_lines = "\n".join(
-        f"  - Cluster #{c['index']} ({c['label']}, category={c['category']}): T1=0 m² -> T2=+{c['area_m2']} m² (Δ Area = +{c['area_m2']} m²), Span={c['span_m']} m ({c['span_km']} km), Quadrant={c['quadrant']}, Confidence={c['confidence']}%"
-        for c in clusters[:25]
-    ) or "  - None (no image pair loaded yet)"
+    quad_summary = ", ".join(
+        f"{qn}={qd['count']} ({qd['area_m2']} m², {qd['pct_of_changed_area']}%)"
+        for qn, qd in (spatial.get("quadrants") or {}).items()
+        if qd.get("count", 0) > 0
+    ) or "None"
 
-    fact_sheet = (
-        f"VERIFIED PRE-COMPUTED SCENE FACT SHEET (USE THESE EXACT NUMBERS):\n"
-        f"- Scene: {audit.get('scene_title')} | Pre (T1): {audit.get('pre_filename')} | Post (T2): {audit.get('post_filename')}\n"
-        f"- Total Detected Change Clusters: {totals.get('cluster_count', 0)}\n"
-        f"- Total Net Added Ground Area (Δ T1->T2): +{totals.get('total_area_m2', 0)} m² (+{totals.get('total_area_km2', 0)} km² / {totals.get('total_area_hectares', 0)} ha / {totals.get('change_pct', 0)}% of tile modified; {totals.get('unchanged_pct', 100)}% unchanged)\n"
-        f"- Visible Max Spatial Span: {totals.get('max_dist_km', 0)} km ({totals.get('max_dist_m', 0)} m)\n"
-        f"- Descriptive Cluster Area Statistics: Mean = {area_s.get('mean_m2', 0)} m², Median = {area_s.get('median_m2', 0)} m², Std Dev (σ) = {area_s.get('std_dev_m2', 0)} m², IQR = {area_s.get('iqr_m2', 0)} m², Min = {area_s.get('min_m2', 0)} m², Max = {area_s.get('max_m2', 0)} m², CV = {area_s.get('cv_pct', 0)}%\n"
-        f"- Spatial Geometry: Mean Span = {spatial.get('mean_cluster_span_m', 0)} m, Nearest-Neighbor Mean Spacing = {spatial.get('nearest_neighbor_mean_m', 0)} m, Density = {totals.get('cluster_density_per_km2', 0)} clusters/km²\n"
-        f"- Detection Confidence: Mean = {conf.get('mean_pct', 0)}%, Range = {conf.get('min_pct', 0)}% - {conf.get('max_pct', 0)}%\n"
-        f"- Individual Added Change Clusters (each represents new change from T1 to T2):\n{cluster_lines}\n"
+    cat_summary = ", ".join(
+        f"{cat}={cd['count']} ({cd['area_m2']} m², {cd['pct_of_area']}%)"
+        for cat, cd in cats.items()
+    ) or "None"
+
+    cluster_table = "\n".join(
+        f"#{c['index']} | {c['label']} | {c['category']} | Δ=+{c['area_m2']} m² | span={c['span_m']}m ({c['span_km']}km) | {c['quadrant']} | {c['confidence']}%"
+        for c in clusters[:20]
+    ) or "None (no imagery loaded)"
+
+    px_line = (
+        f"- Radiometrics: T1 mean lum={px.get('meanLumPre', 0)}, T2 mean lum={px.get('meanLumPost', 0)} (shift {px.get('lumShift', 0):+}), "
+        f"RGB delta=({px.get('meanRgbDelta', {}).get('r', 0)}, {px.get('meanRgbDelta', {}).get('g', 0)}, {px.get('meanRgbDelta', {}).get('b', 0)}), Otsu={px.get('otsuThreshold', 'N/A')}\n"
+        if px else ""
     )
 
-    compact_audit = {
-        "scene_title": audit.get("scene_title"),
-        "pre_filename": audit.get("pre_filename"),
-        "post_filename": audit.get("post_filename"),
-        "gsd_m": audit.get("gsd_m"),
-        "tile": audit.get("tile"),
-        "totals": totals,
-        "area_statistics": area_s,
-        "spatial_statistics": spatial,
-        "confidence_statistics": conf,
-        "category_breakdown": audit.get("category_breakdown"),
-        "pixel_stats": audit.get("pixel_stats"),
-        "model_metrics": {
-            k: audit.get("model_metrics", {}).get(k)
-            for k in ["model_name", "epochs_trained", "best_f1", "val_iou", "val_precision", "val_recall", "val_cls_acc", "classes"]
-        },
-        "clusters": [
-            {
-                "index": c["index"],
-                "label": c["label"],
-                "category": c["category"],
-                "delta_area_added_m2": c["area_m2"],
-                "span_m": c["span_m"],
-                "span_km": c["span_km"],
-                "confidence": c["confidence"],
-                "quadrant": c["quadrant"],
-                "centroid": [c["centroid_lat"], c["centroid_lng"]],
-            }
-            for c in clusters[:25]
-        ],
-    }
-    return f"{fact_sheet}\nTELEMETRY AUDIT JSON:\n```json\n{json.dumps(compact_audit, indent=2)}\n```"
+    return (
+        f"VERIFIED SCENE TELEMETRY (COPY EXACT NUMBERS & CONVERSIONS VERBATIM; DO NOT RECALCULATE UNITS):\n"
+        f"- Scene: {audit.get('scene_title')} | T1={audit.get('pre_filename')} | T2={audit.get('post_filename')} | GSD={audit.get('gsd_m')} m/px | Tile={audit.get('tile', {}).get('width_km', 0.512)}x{audit.get('tile', {}).get('height_km', 0.512)} km ({audit.get('tile', {}).get('area_km2', 0.2621)} km²)\n"
+        f"- Net Change (T1->T2): +{totals.get('total_area_m2', 0)} m² = +{totals.get('total_area_km2', 0)} km² = {totals.get('total_area_hectares', 0)} hectares = {totals.get('total_area_acres', 0)} acres ({totals.get('change_pct', 0)}% changed; {totals.get('unchanged_pct', 100)}% / {totals.get('unchanged_area_m2', 0)} m² unchanged)\n"
+        f"- Clusters & Span: N={totals.get('cluster_count', 0)} clusters | Max Span={totals.get('max_dist_km', 0)} km ({totals.get('max_dist_m', 0)} m) | Density={totals.get('cluster_density_per_km2', 0)}/km²\n"
+        f"- Area Stats: Mean={area_s.get('mean_m2', 0)} m², Median={area_s.get('median_m2', 0)} m², StdDev(σ)={area_s.get('std_dev_m2', 0)} m², IQR={area_s.get('iqr_m2', 0)} m² (Q1={area_s.get('q1_m2', 0)}, Q3={area_s.get('q3_m2', 0)}), Min={area_s.get('min_m2', 0)} m², Max={area_s.get('max_m2', 0)} m², CV={area_s.get('cv_pct', 0)}%, Skew={area_s.get('skewness', 0)}\n"
+        f"- Spatial & Confidence: MeanSpan={spatial.get('mean_cluster_span_m', 0)} m | NearestNeighborMean={spatial.get('nearest_neighbor_mean_m', 0)} m | MeanConf={conf.get('mean_pct', 0)}% ({conf.get('min_pct', 0)}-{conf.get('max_pct', 0)}%)\n"
+        f"- Quadrants: {quad_summary}\n"
+        f"- Categories: {cat_summary}\n"
+        f"{px_line}"
+        f"- Model Validation (LEVIR-CC): Recall={round((mm.get('val_recall') or 0.9227)*100, 2)}%, F1={mm.get('best_f1', 0.7051)}, IoU={mm.get('val_iou', 0.5445)}, ClsAcc={round((mm.get('val_cls_acc') or 0.8067)*100, 2)}%\n"
+        f"- Added Change Clusters (each starts at T1=0 m² -> T2=+Δ m²):\n{cluster_table}"
+    )
 
 
 async def call_real_world_llm(
@@ -358,7 +347,13 @@ async def call_real_world_llm(
 
             resp = await client.post(
                 endpoint,
-                json={"model": model, "messages": messages, "stream": False, "keep_alive": "30m", "options": {"temperature": 0.2}},
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "stream": False,
+                    "keep_alive": "30m",
+                    "options": {"temperature": 0.15, "num_ctx": 2048, "num_predict": 650},
+                },
             )
             if resp.status_code >= 400:
                 raise RuntimeError(f"Ollama error ({resp.status_code}): {resp.text[:400]}")

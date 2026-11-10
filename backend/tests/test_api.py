@@ -196,3 +196,57 @@ class TestUploadEndpoint:
         data = response.json()
         assert "upload_id" in data
         assert data["filename"] == "test.tif"
+
+
+class TestAgentAndInferEndpoints:
+    @pytest.mark.asyncio
+    async def test_query_statistical_audit(self, client):
+        response = await client.post(
+            "/api/query",
+            json={
+                "query": "What is the mean and std dev?",
+                "llm_config": {"provider": "statistical"},
+                "analysis_context": {
+                    "title": "unit_test",
+                    "total_area_m2": 3000,
+                    "clusters": [
+                        {"id": "c1", "label": "C1", "category": "building", "area_m2": 2000, "span_m": 50, "confidence": 95},
+                        {"id": "c2", "label": "C2", "category": "building", "area_m2": 1000, "span_m": 40, "confidence": 92},
+                    ],
+                },
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["statistical_audit"]["area_statistics"]["mean_m2"] == 1500.0
+        assert data["statistical_audit"]["totals"]["cluster_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_infer_pair_endpoint(self, client):
+        import io
+        from PIL import Image, ImageDraw
+
+        img_a = Image.new("RGB", (256, 256), (40, 80, 40))
+        img_b = img_a.copy()
+        draw = ImageDraw.Draw(img_b)
+        draw.rectangle([64, 64, 160, 160], fill=(210, 200, 190))
+
+        buf_a, buf_b = io.BytesIO(), io.BytesIO()
+        img_a.save(buf_a, format="PNG")
+        img_b.save(buf_b, format="PNG")
+        buf_a.seek(0)
+        buf_b.seek(0)
+
+        response = await client.post(
+            "/api/infer-pair",
+            files={
+                "pre_image": ("pre.png", buf_a.getvalue(), "image/png"),
+                "post_image": ("post.png", buf_b.getvalue(), "image/png"),
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert "highlighted_image_url" in data
+        assert "mask_image_url" in data
+        assert "pixel_stats" in data

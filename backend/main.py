@@ -16,6 +16,7 @@ from app.core.logging import setup_logging
 from app.api.v1 import router as api_v1_router
 from app.api.health import router as health_router
 from app.api.query import router as query_router
+from app.api.infer import router as infer_router
 
 logger = structlog.get_logger(__name__)
 
@@ -64,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix="/api", tags=["health"])
     app.include_router(query_router, prefix="/api", tags=["agent"])
     app.include_router(query_router, tags=["agent"])
+    app.include_router(infer_router, prefix="/api", tags=["inference"])
     app.include_router(api_v1_router, prefix="/api/v1")
 
     # ── Exception handlers ────────────────────────────────────────────────

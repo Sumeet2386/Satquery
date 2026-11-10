@@ -167,6 +167,28 @@ export async function executeAgentQuery(payload: AgentQueryPayload | string, leg
   return nextRes.json();
 }
 
+export async function inferLivePairNeural(fileA: File, fileB: File): Promise<any> {
+  const formData = new FormData();
+  formData.append("pre_image", fileA);
+  formData.append("post_image", fileB);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/infer-pair`, {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      throw new Error(`Neural inference HTTP ${res.status}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function testAgentConnection(
   llmConfig: { provider: string; api_key?: string; model?: string; base_url?: string },
   backendOnline: boolean
