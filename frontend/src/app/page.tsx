@@ -32,22 +32,10 @@ const STATS = [
 
 const MODES = [
   {
-    href: "/mission", label: "Mission Control", tag: "RECOMMENDED",
+    href: "/mission", label: "Mission Control", tag: "PRIMARY WORKSPACE",
     Icon: Terminal,
-    desc: "Odysseus-style tri-panel layout: satellite ingestion, live map canvas, and conversational AI agent.",
+    desc: "Unified tri-panel satellite workspace: Pre/Post raster ingestion, interactive bi-temporal viewer, and conversational statistical AI agent.",
     accent: "#e07856",
-  },
-  {
-    href: "/upload", label: "Analysis Workflow", tag: "ENTERPRISE",
-    Icon: Layers,
-    desc: "Step-by-step upload → model selection → result inspection with full audit trail.",
-    accent: "#5294e2",
-  },
-  {
-    href: "/dashboard", label: "Project Dashboard", tag: "MANAGEMENT",
-    Icon: BarChart3,
-    desc: "Overview of all analyses, job queue status, and historical audit logs across projects.",
-    accent: "#48b27e",
   },
 ];
 
@@ -190,14 +178,6 @@ export default function LandingPage() {
           }}>
             <Terminal size={16} /> Open Mission Control <ArrowRight size={15} />
           </Link>
-          <Link href="/upload" style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "12px 28px", borderRadius: 7,
-            background: C.elevated, border: `1px solid ${C.borderMid}`,
-            color: C.text, fontWeight: 700, fontSize: 14, textDecoration: "none",
-          }}>
-            <Sparkles size={15} /> Start Analysis
-          </Link>
         </div>
       </section>
 
@@ -217,14 +197,14 @@ export default function LandingPage() {
       <section id="modes" style={{ maxWidth: 1000, margin: "0 auto", padding: "72px 24px" }}>
         <div style={{ textAlign: "center", marginBottom: 48 }}>
           <h2 style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 24, color: C.text, margin: "0 0 10px", letterSpacing: "-0.02em" }}>
-            Choose Your <span style={{ color: C.coral }}>Operational Mode</span>
+            Unified <span style={{ color: C.coral }}>Mission Control</span>
           </h2>
           <p style={{ fontSize: 13, color: C.textSub, margin: 0 }}>
-            Three distinct entry points for different workflows and expertise levels.
+            Direct access to bi-temporal satellite change detection, metric distance calculation, and statistical AI reasoning.
           </p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+        <div style={{ maxWidth: 460, margin: "0 auto" }}>
           {MODES.map(mode => (
             <Link key={mode.href} href={mode.href} style={{
               display: "block", padding: "24px 22px",
@@ -320,9 +300,9 @@ export default function LandingPage() {
             {" "}— Agentic Satellite Image Intelligence Platform
           </div>
           <div style={{ display: "flex", gap: 24 }}>
-            {["/mission", "/dashboard", "/upload", "/history"].map((href, i) => (
+            {["/mission", "/history"].map((href, i) => (
               <Link key={href} href={href} style={{ fontFamily: "monospace", fontSize: 11, color: C.textMuted, textDecoration: "none" }}>
-                {["Mission Control", "Dashboard", "New Analysis", "History"][i]}
+                {["Mission Control", "History"][i]}
               </Link>
             ))}
           </div>
