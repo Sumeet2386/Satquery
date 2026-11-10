@@ -24,8 +24,8 @@ You have access to exact live telemetry & statistics computed from the active sa
 
 CORE RESPONSE PRINCIPLES:
 1. **Answer EVERY query directly, clearly, and thoroughly** — whether the user asks about the active satellite images, statistical metrics, GIS/remote-sensing theory, urban planning, disaster response, math conversions, or general follow-up questions. Never refuse or give a canned generic summary.
-2. **Ground Scene Claims in Exact Telemetry**: When the user asks about the loaded imagery (`has_active_scene` is true / `cluster_count > 0`), cite the EXACT numbers from `TELEMETRY AUDIT JSON` (areas in m²/km²/ha, spans in km/m, mean, median, std dev, IQR, Z-scores, quadrant counts, nearest-neighbor distances, RGB/luminance shifts, and cluster IDs). Never fabricate measurements.
-3. **Bi-Temporal Contrast**: When comparing Pre-Event (T1 Baseline) vs Post-Event (T2 Target), clearly contrast the T1 baseline state, T2 target state, and the exact physical difference (Δ Delta).
+2. **Every Detected Cluster = Net Change Added (T1 ➔ T2)**: Each cluster in the telemetry represents a **detected physical change** between Pre-Event (T1) and Post-Event (T2). That means before the event (T1) those modified pixels had **0 m²** of new structure, and post-event (T2) they gained **+area_m2** (so $\Delta\text{Area} = +\text{area\_m2}$, NEVER 0!).
+3. **Always Cite Exact Pre-Computed Statistics**: Copy `total_area_m2`, `change_pct`, `max_dist_km`, `mean_m2`, `median_m2`, `std_dev_m2`, `iqr_m2`, quadrant counts, and cluster values verbatim from the VERIFIED TELEMETRY SUMMARY & JSON below. Never recalculate or replace them with 0.0.
 4. **No Imagery Loaded Yet**: If `cluster_count == 0` and no image pair is loaded, still answer the user's question helpfully using your full AI knowledge (and briefly note if scene-specific measurements require uploading a T1/T2 pair).
 5. **Multimodal Vision**: When T1 and T2 images are attached, inspect both visually and combine visual observations with statistical telemetry.
 6. **Formatting**: Use clean GitHub-style Markdown (concise headings, bullet points, and Markdown tables when comparing metrics or clusters)."""
@@ -123,17 +123,40 @@ def resolve_active_llm_config(request_llm_config: Optional[Dict[str, Any]] = Non
 
 
 def _build_telemetry_context_block(audit: Dict[str, Any]) -> str:
-    """Format the computed statistical audit cleanly for LLM grounding."""
+    """Format a plain-English pre-computed summary + JSON for high-accuracy LLM grounding."""
+    totals = audit.get("totals", {})
+    area_s = audit.get("area_statistics", {})
+    spatial = audit.get("spatial_statistics", {})
+    conf = audit.get("confidence_statistics", {})
+    clusters = audit.get("clusters") or []
+
+    cluster_lines = "\n".join(
+        f"  - Cluster #{c['index']} ({c['label']}, category={c['category']}): T1=0 m² -> T2=+{c['area_m2']} m² (Δ Area = +{c['area_m2']} m²), Span={c['span_m']} m ({c['span_km']} km), Quadrant={c['quadrant']}, Confidence={c['confidence']}%"
+        for c in clusters[:25]
+    ) or "  - None (no image pair loaded yet)"
+
+    fact_sheet = (
+        f"VERIFIED PRE-COMPUTED SCENE FACT SHEET (USE THESE EXACT NUMBERS):\n"
+        f"- Scene: {audit.get('scene_title')} | Pre (T1): {audit.get('pre_filename')} | Post (T2): {audit.get('post_filename')}\n"
+        f"- Total Detected Change Clusters: {totals.get('cluster_count', 0)}\n"
+        f"- Total Net Added Ground Area (Δ T1->T2): +{totals.get('total_area_m2', 0)} m² (+{totals.get('total_area_km2', 0)} km² / {totals.get('total_area_hectares', 0)} ha / {totals.get('change_pct', 0)}% of tile modified; {totals.get('unchanged_pct', 100)}% unchanged)\n"
+        f"- Visible Max Spatial Span: {totals.get('max_dist_km', 0)} km ({totals.get('max_dist_m', 0)} m)\n"
+        f"- Descriptive Cluster Area Statistics: Mean = {area_s.get('mean_m2', 0)} m², Median = {area_s.get('median_m2', 0)} m², Std Dev (σ) = {area_s.get('std_dev_m2', 0)} m², IQR = {area_s.get('iqr_m2', 0)} m², Min = {area_s.get('min_m2', 0)} m², Max = {area_s.get('max_m2', 0)} m², CV = {area_s.get('cv_pct', 0)}%\n"
+        f"- Spatial Geometry: Mean Span = {spatial.get('mean_cluster_span_m', 0)} m, Nearest-Neighbor Mean Spacing = {spatial.get('nearest_neighbor_mean_m', 0)} m, Density = {totals.get('cluster_density_per_km2', 0)} clusters/km²\n"
+        f"- Detection Confidence: Mean = {conf.get('mean_pct', 0)}%, Range = {conf.get('min_pct', 0)}% - {conf.get('max_pct', 0)}%\n"
+        f"- Individual Added Change Clusters (each represents new change from T1 to T2):\n{cluster_lines}\n"
+    )
+
     compact_audit = {
         "scene_title": audit.get("scene_title"),
         "pre_filename": audit.get("pre_filename"),
         "post_filename": audit.get("post_filename"),
         "gsd_m": audit.get("gsd_m"),
         "tile": audit.get("tile"),
-        "totals": audit.get("totals"),
-        "area_statistics": audit.get("area_statistics"),
-        "spatial_statistics": audit.get("spatial_statistics"),
-        "confidence_statistics": audit.get("confidence_statistics"),
+        "totals": totals,
+        "area_statistics": area_s,
+        "spatial_statistics": spatial,
+        "confidence_statistics": conf,
         "category_breakdown": audit.get("category_breakdown"),
         "pixel_stats": audit.get("pixel_stats"),
         "model_metrics": {
@@ -145,17 +168,17 @@ def _build_telemetry_context_block(audit: Dict[str, Any]) -> str:
                 "index": c["index"],
                 "label": c["label"],
                 "category": c["category"],
-                "area_m2": c["area_m2"],
+                "delta_area_added_m2": c["area_m2"],
                 "span_m": c["span_m"],
                 "span_km": c["span_km"],
                 "confidence": c["confidence"],
                 "quadrant": c["quadrant"],
                 "centroid": [c["centroid_lat"], c["centroid_lng"]],
             }
-            for c in (audit.get("clusters") or [])[:25]
+            for c in clusters[:25]
         ],
     }
-    return f"TELEMETRY AUDIT JSON (VERIFIED GROUND TRUTH):\n```json\n{json.dumps(compact_audit, indent=2)}\n```"
+    return f"{fact_sheet}\nTELEMETRY AUDIT JSON:\n```json\n{json.dumps(compact_audit, indent=2)}\n```"
 
 
 async def call_real_world_llm(
@@ -287,7 +310,7 @@ async def call_real_world_llm(
 
             resp = await client.post(
                 endpoint,
-                json={"model": model, "messages": messages, "stream": False, "options": {"temperature": 0.25}},
+                json={"model": model, "messages": messages, "stream": False, "keep_alive": "30m", "options": {"temperature": 0.2}},
             )
             if resp.status_code >= 400:
                 raise RuntimeError(f"Ollama error ({resp.status_code}): {resp.text[:400]}")

@@ -46,7 +46,26 @@ export async function POST(req: NextRequest) {
     const provider = (llmConfig.provider || "statistical").toLowerCase();
     const history = Array.isArray(body.conversation_history) ? body.conversation_history.slice(-8) : [];
 
+    const clusterLines =
+      audit.clusters
+        .slice(0, 25)
+        .map(
+          (c) =>
+            `  - Cluster #${c.index} (${c.label}, category=${c.category}): T1=0 m² -> T2=+${c.area_m2} m² (Δ Area = +${c.area_m2} m²), Span=${c.span_m} m (${c.span_km} km), Quadrant=${c.quadrant}, Confidence=${c.confidence}%`
+        )
+        .join("\n") || "  - None (no image pair loaded yet)";
+
+    const factSheet =
+      `VERIFIED PRE-COMPUTED SCENE FACT SHEET (USE THESE EXACT NUMBERS; EACH CLUSTER IS NET CHANGE T1=0 -> T2=+area_m2):\n` +
+      `- Scene: ${audit.scene_title} | Pre (T1): ${audit.pre_filename} | Post (T2): ${audit.post_filename}\n` +
+      `- Total Detected Change Clusters: ${audit.totals.cluster_count}\n` +
+      `- Total Net Added Ground Area (Δ T1->T2): +${audit.totals.total_area_m2} m² (+${audit.totals.total_area_km2} km² / ${audit.totals.total_area_hectares} ha / ${audit.totals.change_pct}% of tile modified)\n` +
+      `- Visible Max Spatial Span: ${audit.totals.max_dist_km} km (${audit.totals.max_dist_m} m)\n` +
+      `- Descriptive Cluster Area Statistics: Mean = ${audit.area_statistics.mean_m2} m², Median = ${audit.area_statistics.median_m2} m², Std Dev (σ) = ${audit.area_statistics.std_dev_m2} m², IQR = ${audit.area_statistics.iqr_m2} m², Min = ${audit.area_statistics.min_m2} m², Max = ${audit.area_statistics.max_m2} m²\n` +
+      `- Individual Added Change Clusters:\n${clusterLines}\n\n`;
+
     const telemetryBlock =
+      factSheet +
       "TELEMETRY AUDIT JSON (VERIFIED GROUND TRUTH):\n```json\n" +
       JSON.stringify(
         {
@@ -246,7 +265,7 @@ async function invokeLLM(opts: {
     const r = await fetch(`${base}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: chosenModel, messages, stream: false, options: { temperature: 0.25 } }),
+      body: JSON.stringify({ model: chosenModel, messages, stream: false, keep_alive: "30m", options: { temperature: 0.2 } }),
     });
     if (!r.ok) throw new Error(`Ollama (${r.status}): ${(await r.text()).slice(0, 300)}`);
     const data = await r.json();
