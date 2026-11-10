@@ -11,29 +11,37 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import { LLMClientConfig, PROVIDER_PRESETS } from "../../lib/llmConfig";
+
 interface ChatComposerProps {
   onSendMessage: (text: string) => void;
   isProcessing: boolean;
   onAttachClick?: () => void;
   onParamsClick?: () => void;
+  llmConfig?: LLMClientConfig;
+  onOpenSettings?: () => void;
+  onQuickModelChange?: (model: string) => void;
 }
-
-const MODELS = [
-  "isro-vit-large / vqa-geo-v2",
-  "sentinel-sam-geo-3b",
-  "sar-cband-fusion-transformer",
-];
 
 export const ChatComposer: React.FC<ChatComposerProps> = ({
   onSendMessage,
   isProcessing,
   onAttachClick,
   onParamsClick,
+  llmConfig,
+  onOpenSettings,
+  onQuickModelChange,
 }) => {
   const [inputText, setInputText] = useState("");
   const [executionMode, setExecutionMode] = useState<"Agent" | "Manual">("Agent");
-  const [selectedModel, setSelectedModel] = useState(MODELS[0]);
   const [showModelPicker, setShowModelPicker] = useState(false);
+
+  const activeProvider = llmConfig?.provider || "ollama";
+  const activePreset = PROVIDER_PRESETS[activeProvider];
+  const activeModelLabel = llmConfig
+    ? `${llmConfig.provider}/${llmConfig.model}`
+    : "ollama/llama3.2";
+  const suggestedModels = activePreset?.suggestedModels || ["llama3.2"];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -192,7 +200,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
               >
                 <Cpu size={10} style={{ color: "#e07856", flexShrink: 0 }} />
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {selectedModel}
+                  {activeModelLabel}
                 </span>
                 <ChevronDown size={9} style={{ color: "#4b5565", flexShrink: 0 }} />
               </button>
@@ -203,7 +211,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
                     position: "absolute",
                     right: 0,
                     bottom: "calc(100% + 4px)",
-                    width: 220,
+                    width: 230,
                     background: "#111419",
                     border: "1px solid #252b36",
                     borderRadius: 6,
@@ -212,11 +220,14 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
                     padding: 4,
                   }}
                 >
-                  {MODELS.map((m) => (
+                  {suggestedModels.map((m) => (
                     <button
                       key={m}
                       type="button"
-                      onClick={() => { setSelectedModel(m); setShowModelPicker(false); }}
+                      onClick={() => {
+                        onQuickModelChange?.(m);
+                        setShowModelPicker(false);
+                      }}
                       style={{
                         display: "block",
                         width: "100%",
@@ -227,14 +238,43 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
                         cursor: "pointer",
                         fontFamily: "monospace",
                         fontSize: 10,
-                        background: selectedModel === m ? "#15181f" : "transparent",
-                        color: selectedModel === m ? "#e07856" : "#748094",
-                        fontWeight: selectedModel === m ? 700 : 400,
+                        background: llmConfig?.model === m ? "#15181f" : "transparent",
+                        color: llmConfig?.model === m ? "#e07856" : "#748094",
+                        fontWeight: llmConfig?.model === m ? 700 : 400,
                       }}
                     >
-                      {m}
+                      {activeProvider}/{m}
                     </button>
                   ))}
+                  {onOpenSettings && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowModelPicker(false);
+                        onOpenSettings();
+                      }}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "6px 10px",
+                        marginTop: 4,
+                        borderTop: "1px solid #1c2028",
+                        borderLeft: "none",
+                        borderRight: "none",
+                        borderBottom: "none",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        fontFamily: "monospace",
+                        fontSize: 10,
+                        background: "transparent",
+                        color: "#48b27e",
+                        fontWeight: 700,
+                      }}
+                    >
+                      ⚙ Configure Provider / API Key…
+                    </button>
+                  )}
                 </div>
               )}
             </div>

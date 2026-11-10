@@ -164,6 +164,7 @@ interface ChatPanelProps {
   files: GeoTIFFMetadata[];
   llmConfig?: LLMClientConfig;
   onOpenSettings?: () => void;
+  onQuickModelChange?: (model: string) => void;
 }
 
 const QUICK_PROMPTS = [
@@ -185,6 +186,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   files,
   llmConfig,
   onOpenSettings,
+  onQuickModelChange,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -801,6 +803,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         isProcessing={isProcessing}
         onAttachClick={() => {}}
         onParamsClick={() => {}}
+        llmConfig={llmConfig}
+        onOpenSettings={onOpenSettings}
+        onQuickModelChange={onQuickModelChange}
       />
     </div>
   );

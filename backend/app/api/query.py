@@ -25,6 +25,7 @@ from core.agent.stats_engine import (
 )
 from core.agent.llm_agent import (
     resolve_active_llm_config,
+    resolve_effective_llm_config,
     call_real_world_llm,
 )
 
@@ -121,7 +122,7 @@ async def test_llm_connection(req: TestConnectionRequest):
 @router.get("/agent/status")
 async def get_agent_status():
     """Return active server-side LLM configuration status (never leaks API keys)."""
-    cfg = resolve_active_llm_config()
+    cfg = await resolve_effective_llm_config()
     return {
         "provider": cfg["provider"],
         "model": cfg["model"],
@@ -154,8 +155,8 @@ async def handle_agent_query(req: QueryRequest):
         if isinstance(c.get("bbox"), list) and len(c["bbox"]) == 4
     ]
 
-    # 2. Resolve LLM provider (request-level config or environment)
-    llm_cfg = resolve_active_llm_config(req.llm_config)
+    # 2. Resolve LLM provider (request-level config, env keys, or local Ollama)
+    llm_cfg = await resolve_effective_llm_config(req.llm_config)
     answer = ""
     selected_task = "statistical_query_evaluation"
     model_name = "SatQuery Statistical Engine v2"

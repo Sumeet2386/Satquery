@@ -115,37 +115,32 @@ export const PROVIDER_PRESETS: Record<
 const STORAGE_KEY = "satquery_llm_config_v1";
 
 export function loadLLMConfig(): LLMClientConfig {
+  const defaultLocalOllama: LLMClientConfig = {
+    provider: "ollama",
+    api_key: "",
+    model: "llama3.2",
+    base_url: "http://localhost:11434",
+    enable_vision: true,
+  };
   if (typeof window === "undefined") {
-    return {
-      provider: "statistical",
-      api_key: "",
-      model: "statistical-engine-v2",
-      base_url: "",
-      enable_vision: true,
-    };
+    return defaultLocalOllama;
   }
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
-        provider: parsed.provider || "statistical",
+        provider: parsed.provider || "ollama",
         api_key: parsed.api_key || "",
-        model: parsed.model || PROVIDER_PRESETS[(parsed.provider as LLMProviderId) || "statistical"]?.defaultModel || "statistical-engine-v2",
-        base_url: parsed.base_url || "",
+        model: parsed.model || PROVIDER_PRESETS[(parsed.provider as LLMProviderId) || "ollama"]?.defaultModel || "llama3.2",
+        base_url: parsed.base_url || (parsed.provider === "ollama" ? "http://localhost:11434" : ""),
         enable_vision: parsed.enable_vision !== undefined ? Boolean(parsed.enable_vision) : true,
       };
     }
   } catch {
     // Ignore storage read errors
   }
-  return {
-    provider: "statistical",
-    api_key: "",
-    model: "statistical-engine-v2",
-    base_url: "",
-    enable_vision: true,
-  };
+  return defaultLocalOllama;
 }
 
 export function saveLLMConfig(cfg: LLMClientConfig): void {

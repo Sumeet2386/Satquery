@@ -18,17 +18,17 @@ from app.core.config import settings
 logger = structlog.get_logger(__name__)
 
 
-SYSTEM_INSTRUCTIONS = """You are **SatQuery AI**, an elite real-world geospatial & remote-sensing intelligence agent.
+SYSTEM_INSTRUCTIONS = """You are **SatQuery AI**, a real-world multimodal geospatial & remote-sensing intelligence AI agent powered by an LLM.
 
-You are analyzing a live bi-temporal satellite image pair (Pre-Event T1 vs Post-Event T2) alongside exact computer-vision and statistical telemetry computed by the Siamese-CD / LEVIR-CC pipeline.
+You have access to exact live telemetry & statistics computed from the active satellite image pair (Pre-Event T1 vs Post-Event T2) when imagery is loaded, AND full general remote-sensing / scientific / geospatial knowledge.
 
-STRICT GROUNDING & STATISTICAL RULES:
-1. Answer the user's EXACT question directly, thoroughly, and conversationally — NEVER give a generic boilerplate summary when the user asks a specific question.
-2. Whenever quantitative or statistical analysis is relevant (areas, distances, percentages, averages, medians, standard deviations, IQR, Z-scores, quadrant distributions, nearest-neighbor spacing, model F1/IoU/recall/precision, unit conversions, or GSD sensitivity), use the EXACT computed numbers from the provided TELEMETRY AUDIT JSON. Never invent or guess measurements.
-3. Explicitly distinguish **Pre-Event (T1 Baseline)** vs **Post-Event (T2 Target)** and explain the **actual physical difference (Δ Delta)** when analyzing scene changes.
-4. When T1 and T2 satellite images are attached in your multimodal input, visually inspect BOTH images directly (land cover, buildings, roads, soil grading, vegetation changes, shadows, alignment) and combine your direct visual observations with the exact statistical telemetry.
-5. Support follow-up reasoning using the conversation history (e.g., comparing clusters, converting units, explaining anomalies, assessing confidence or false positives).
-6. Format responses cleanly in GitHub-style Markdown (headings, concise bullet points, and Markdown tables when comparing metrics or clusters)."""
+CORE RESPONSE PRINCIPLES:
+1. **Answer EVERY query directly, clearly, and thoroughly** — whether the user asks about the active satellite images, statistical metrics, GIS/remote-sensing theory, urban planning, disaster response, math conversions, or general follow-up questions. Never refuse or give a canned generic summary.
+2. **Ground Scene Claims in Exact Telemetry**: When the user asks about the loaded imagery (`has_active_scene` is true / `cluster_count > 0`), cite the EXACT numbers from `TELEMETRY AUDIT JSON` (areas in m²/km²/ha, spans in km/m, mean, median, std dev, IQR, Z-scores, quadrant counts, nearest-neighbor distances, RGB/luminance shifts, and cluster IDs). Never fabricate measurements.
+3. **Bi-Temporal Contrast**: When comparing Pre-Event (T1 Baseline) vs Post-Event (T2 Target), clearly contrast the T1 baseline state, T2 target state, and the exact physical difference (Δ Delta).
+4. **No Imagery Loaded Yet**: If `cluster_count == 0` and no image pair is loaded, still answer the user's question helpfully using your full AI knowledge (and briefly note if scene-specific measurements require uploading a T1/T2 pair).
+5. **Multimodal Vision**: When T1 and T2 images are attached, inspect both visually and combine visual observations with statistical telemetry.
+6. **Formatting**: Use clean GitHub-style Markdown (concise headings, bullet points, and Markdown tables when comparing metrics or clusters)."""
 
 
 def _strip_data_url_prefix(b64_str: str) -> Tuple[str, str]:
@@ -37,6 +37,42 @@ def _strip_data_url_prefix(b64_str: str) -> Tuple[str, str]:
     if match:
         return match.group(1), match.group(2)
     return "image/jpeg", b64_str.strip()
+
+
+async def detect_local_ollama_model(base_url: str = "") -> Optional[str]:
+    """Probe local Ollama daemon and return an available model name if running."""
+    ollama_base = (base_url or settings.OLLAMA_BASE_URL or "http://localhost:11434").rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=1.5) as client:
+            resp = await client.get(f"{ollama_base}/api/tags")
+            if resp.status_code == 200:
+                models = [m.get("name", "") for m in resp.json().get("models", []) if m.get("name")]
+                if models:
+                    for preferred in ["llama3.2", "qwen2.5", "llava", "llama3"]:
+                        for m in models:
+                            if preferred in m.lower():
+                                return m
+                    return models[0]
+    except Exception:
+        return None
+    return None
+
+
+async def resolve_effective_llm_config(request_llm_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Resolve explicit LLM config, env keys, or auto-detected local Ollama LLM."""
+    cfg = resolve_active_llm_config(request_llm_config)
+    req_provider = ((request_llm_config or {}).get("provider") or "").strip().lower()
+    if cfg["provider"] == "statistical" and req_provider != "statistical":
+        ollama_model = await detect_local_ollama_model()
+        if ollama_model:
+            return {
+                "provider": "ollama",
+                "api_key": "",
+                "model": ollama_model,
+                "base_url": settings.OLLAMA_BASE_URL or "http://localhost:11434",
+                "enable_vision": True,
+            }
+    return cfg
 
 
 def resolve_active_llm_config(request_llm_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -147,7 +183,7 @@ async def call_real_world_llm(
     history = (conversation_history or [])[-8:]
     has_images = enable_vision and bool(pre_image_b64 and post_image_b64)
 
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with httpx.AsyncClient(timeout=120.0) as client:
         # ── 1. GOOGLE GEMINI ──────────────────────────────────────────────────
         if provider == "gemini":
             endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"

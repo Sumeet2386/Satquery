@@ -56,10 +56,10 @@ export default function OdysseusMissionControl() {
   const [currentRunningStep, setCurrentRunningStep] = useState<ExecutionTraceStep | null>(null);
   const [latestResponse, setLatestResponse] = useState<AssistantResponse | null>(null);
   const [llmConfig, setLlmConfig] = useState<LLMClientConfig>({
-    provider: "statistical",
+    provider: "ollama",
     api_key: "",
-    model: "statistical-engine-v2",
-    base_url: "",
+    model: "llama3.2",
+    base_url: "http://localhost:11434",
     enable_vision: true,
   });
   const [settingsModalOpen, setSettingsModalOpen] = useState<boolean>(false);
@@ -187,16 +187,12 @@ export default function OdysseusMissionControl() {
     let maxDistKm = reasoning.maxDistKm;
     let totalAreaM2 = reasoning.totalAreaM2;
 
-    // ── 3. Execute Real-World Agent (FastAPI /api/query -> Next /api/agent) ──
-    const isGreetingOrCapability =
-      /^(hi|hello|hey|greetings|hola)\b/i.test(qLower) ||
-      ["hi", "hello", "hey"].includes(qLower);
-
+    // ── 3. Execute Real-World LLM Agent (FastAPI /api/query -> Next /api/agent)
     const hasExternalLlm =
       llmConfig.provider !== "statistical" &&
       (Boolean(llmConfig.api_key) || llmConfig.provider === "ollama");
 
-    if (!isGreetingOrCapability || hasExternalLlm) {
+    if (true) {
       try {
         const filePaths = files.map((f) => f.id);
         const analysisContext = buildAnalysisContext(targetScenario, activeLiveAnalysis);
@@ -572,6 +568,11 @@ export default function OdysseusMissionControl() {
                 files={files}
                 llmConfig={llmConfig}
                 onOpenSettings={() => setSettingsModalOpen(true)}
+                onQuickModelChange={(model) => {
+                  const updated = { ...llmConfig, model };
+                  setLlmConfig(updated);
+                  saveLLMConfig(updated);
+                }}
               />
             </div>
           </div>
