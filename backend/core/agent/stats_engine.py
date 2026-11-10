@@ -568,3 +568,4 @@ def answer_query_statistically(
         f"*Tip: You can ask specific follow-up questions (e.g. \"Compare cluster 1 and 2\", \"What is the standard deviation and IQR?\", \"Show quadrant distribution\", or connect an external Vision LLM in the ⚙ Agent Settings button for open-ended visual reasoning).*"
     )
     return ans, "bitemporal_statistical_synthesis", {"cluster_count": totals["cluster_count"], "total_area_m2": totals["total_area_m2"]}
+

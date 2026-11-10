@@ -320,3 +320,4 @@ async def call_real_world_llm(
             raise RuntimeError(f"{provider.title()} returned empty choices.")
         answer = (choices[0].get("message", {}).get("content") or "").strip()
         return answer, f"{provider}/{model}", {"vision_attached": vision_used, "provider": provider}
+

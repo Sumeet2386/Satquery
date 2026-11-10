@@ -503,3 +503,4 @@ export function answerQueryStatisticallyTS(
       `**Category Breakdown**:\n${catBullets || "  - Physical structural changes detected"}`,
   };
 }
+
