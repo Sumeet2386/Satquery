@@ -37,8 +37,16 @@ async def upload_image(
     Accepted formats: GeoTIFF (.tif, .tiff), JPEG2000 (.jp2)
     Maximum size: 500 MB
     """
-    # Validate file extension
-    ext = Path(file.filename).suffix.lower().lstrip(".")
+    # Validate & sanitize filename to prevent path traversal
+    raw_name = file.filename or ""
+    safe_name = Path(raw_name).name
+    if not safe_name or safe_name in (".", "..") or "/" in safe_name or "\\" in safe_name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid upload filename.",
+        )
+
+    ext = Path(safe_name).suffix.lower().lstrip(".")
     if ext not in settings.SUPPORTED_FORMATS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -49,9 +57,11 @@ async def upload_image(
         )
 
     upload_id = str(uuid.uuid4())
-    user_dir = STORAGE_DIR / str(current_user.id) / upload_id
+    user_dir = (STORAGE_DIR / str(current_user.id) / upload_id).resolve()
     user_dir.mkdir(parents=True, exist_ok=True)
-    dest_path = user_dir / file.filename
+    dest_path = (user_dir / safe_name).resolve()
+    if not dest_path.is_relative_to(user_dir):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid upload path.")
 
     # Stream to disk, checking size
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024

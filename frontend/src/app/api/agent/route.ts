@@ -18,9 +18,66 @@ function stripDataUrl(b64: string): { mime: string; data: string } {
   return { mime: "image/jpeg", data: b64.trim() };
 }
 
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQ = 30;
+const ipRequestLog = new Map<string, number[]>();
+
+function checkRateLimit(req: NextRequest): boolean {
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+  const now = Date.now();
+  const prev = (ipRequestLog.get(ip) || []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (prev.length >= RATE_LIMIT_MAX_REQ) {
+    ipRequestLog.set(ip, prev);
+    return false;
+  }
+  prev.push(now);
+  ipRequestLog.set(ip, prev);
+  return true;
+}
+
+function validateEndpointUrl(rawUrl: string, provider: string): string {
+  const clean = rawUrl.trim().replace(/\/$/, "");
+  if (!clean) return "";
+  const parsed = new URL(clean);
+  const host = parsed.hostname.toLowerCase();
+
+  if (provider === "ollama") {
+    if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") || !["localhost", "127.0.0.1"].includes(host)) {
+      throw new Error("Ollama endpoint must be localhost or 127.0.0.1.");
+    }
+    const port = parsed.port || "11434";
+    if (port !== "11434") {
+      throw new Error("Ollama endpoint port must be 11434.");
+    }
+    return clean;
+  }
+
+  if (parsed.protocol !== "https:") {
+    throw new Error("Custom LLM endpoint must use HTTPS.");
+  }
+  if (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host === "0.0.0.0" ||
+    host.startsWith("10.") ||
+    host.startsWith("192.168.") ||
+    host.startsWith("169.254.") ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal")
+  ) {
+    throw new Error("Custom endpoint cannot target local, private, or metadata hosts.");
+  }
+  return clean;
+}
+
 export async function POST(req: NextRequest) {
   const t0 = Date.now();
   try {
+    if (!checkRateLimit(req)) {
+      return NextResponse.json({ ok: false, error: "Rate limit exceeded. Please wait." }, { status: 429 });
+    }
     const body = await req.json();
 
     // Connection test mode
@@ -40,7 +97,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const query: string = body.query || "";
+    const query: string = String(body.query || "").slice(0, 2000);
+    if (!query.trim()) {
+      return NextResponse.json({ ok: false, error: "Query cannot be empty." }, { status: 400 });
+    }
     const audit = computeStatisticalAuditTS(body.analysis_context);
     const llmConfig = body.llm_config || {};
     const provider = (llmConfig.provider || "statistical").toLowerCase();
@@ -250,7 +310,7 @@ async function invokeLLM(opts: {
 
   if (provider === "ollama") {
     const chosenModel = model || "llama3.2";
-    const base = (baseUrl || "http://localhost:11434").replace(/\/$/, "");
+    const base = validateEndpointUrl(baseUrl || "http://localhost:11434", "ollama");
     const messages: any[] = [
       { role: "system", content: systemPrompt },
       ...history.filter((h) => h.content?.trim()).map((h) => ({ role: h.role === "assistant" ? "assistant" : "user", content: h.content.slice(0, 2000) })),
@@ -280,11 +340,13 @@ async function invokeLLM(opts: {
     groq: "https://api.groq.com/openai/v1/chat/completions",
     openrouter: "https://openrouter.ai/api/v1/chat/completions",
   };
-  const endpoint = baseUrl
-    ? baseUrl.replace(/\/$/, "").endsWith("/chat/completions")
-      ? baseUrl.replace(/\/$/, "")
-      : `${baseUrl.replace(/\/$/, "")}/chat/completions`
-    : endpointMap[provider] || endpointMap.openai;
+  const endpoint =
+    provider === "custom" && baseUrl
+      ? (() => {
+          const clean = validateEndpointUrl(baseUrl, "custom");
+          return clean.endsWith("/chat/completions") ? clean : `${clean}/chat/completions`;
+        })()
+      : endpointMap[provider] || endpointMap.openai;
   const chosenModel = model || (provider === "groq" ? "llama-3.3-70b-versatile" : "gpt-4o-mini");
 
   const messages: any[] = [

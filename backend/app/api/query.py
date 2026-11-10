@@ -12,10 +12,11 @@ Provides real-time multimodal reasoning over ingested satellite rasters:
 
 from __future__ import annotations
 
+from collections import defaultdict, deque
 import time
 import uuid
-from typing import Any, Dict, List, Optional
-from fastapi import APIRouter
+from typing import Any, Deque, Dict, List, Optional
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 import structlog
 
@@ -33,24 +34,43 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
+_RATE_LIMIT_WINDOW_S = 60.0
+_RATE_LIMIT_MAX_REQ = 30
+_IP_REQUEST_LOG: Dict[str, Deque[float]] = defaultdict(deque)
+
+
+def _enforce_rate_limit(request: Request) -> None:
+    client_ip = (request.client.host if request.client else None) or "local"
+    now = time.monotonic()
+    q = _IP_REQUEST_LOG[client_ip]
+    while q and now - q[0] > _RATE_LIMIT_WINDOW_S:
+        q.popleft()
+    if len(q) >= _RATE_LIMIT_MAX_REQ:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Please wait before sending more queries.",
+        )
+    q.append(now)
+
 
 class QueryRequest(BaseModel):
-    query: str = Field(..., description="Natural language question or command")
-    file_paths: List[str] = Field(default_factory=list, description="IDs or paths of currently loaded satellite images")
+    query: str = Field(..., min_length=1, max_length=2000, description="Natural language question or command")
+    file_paths: List[str] = Field(default_factory=list, max_length=10, description="IDs or paths of currently loaded satellite images")
     analysis_context: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Live telemetry & cluster measurements from active Pre/Post pair",
     )
     conversation_history: List[Dict[str, str]] = Field(
         default_factory=list,
+        max_length=16,
         description="Recent conversation turns [{role, content}] for follow-up reasoning",
     )
     llm_config: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Optional runtime LLM configuration {provider, api_key, model, base_url, enable_vision}",
     )
-    pre_image_b64: Optional[str] = Field(default=None, description="Optional Pre-Event T1 image (base64 data URL)")
-    post_image_b64: Optional[str] = Field(default=None, description="Optional Post-Event T2 image (base64 data URL)")
+    pre_image_b64: Optional[str] = Field(default=None, max_length=2_000_000, description="Optional Pre-Event T1 image (base64 data URL)")
+    post_image_b64: Optional[str] = Field(default=None, max_length=2_000_000, description="Optional Post-Event T2 image (base64 data URL)")
 
 
 class ExecutionTrace(BaseModel):
@@ -89,8 +109,9 @@ class TestConnectionRequest(BaseModel):
 
 
 @router.post("/agent/test-connection")
-async def test_llm_connection(req: TestConnectionRequest):
+async def test_llm_connection(req: TestConnectionRequest, request: Request):
     """Verify connectivity & credentials for the configured LLM provider."""
+    _enforce_rate_limit(request)
     cfg = resolve_active_llm_config({
         "provider": req.provider,
         "api_key": req.api_key,
@@ -131,7 +152,7 @@ async def get_agent_status():
 
 
 @router.post("/query", response_model=QueryResponse)
-async def handle_agent_query(req: QueryRequest):
+async def handle_agent_query(req: QueryRequest, request: Request):
     """
     Real-world agent reasoning endpoint:
     1. Computes exact statistical audit over active Pre/Post raster telemetry.
@@ -139,6 +160,7 @@ async def handle_agent_query(req: QueryRequest):
        with full statistical telemetry + conversation history + optional vision frames.
     3. Falls back cleanly to Statistical Query Evaluator if no external LLM is active.
     """
+    _enforce_rate_limit(request)
     t0 = time.perf_counter()
     trace_id = f"trc_{uuid.uuid4().hex[:12]}"
     timestamp = time.strftime("%H:%M:%S", time.localtime())

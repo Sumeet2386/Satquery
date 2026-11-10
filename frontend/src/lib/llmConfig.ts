@@ -113,6 +113,7 @@ export const PROVIDER_PRESETS: Record<
 };
 
 const STORAGE_KEY = "satquery_llm_config_v1";
+const SESSION_KEY_STORE = "satquery_llm_secret_v1";
 
 export function loadLLMConfig(): LLMClientConfig {
   const defaultLocalOllama: LLMClientConfig = {
@@ -127,11 +128,20 @@ export function loadLLMConfig(): LLMClientConfig {
   }
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
+    const sessionKey = window.sessionStorage.getItem(SESSION_KEY_STORE) || "";
     if (raw) {
       const parsed = JSON.parse(raw);
+      // Migrate any legacy api_key out of localStorage into tab-scoped sessionStorage
+      if (parsed.api_key) {
+        if (!sessionKey) {
+          window.sessionStorage.setItem(SESSION_KEY_STORE, parsed.api_key);
+        }
+        const { api_key: _removed, ...rest } = parsed;
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
+      }
       return {
         provider: parsed.provider || "ollama",
-        api_key: parsed.api_key || "",
+        api_key: sessionKey || parsed.api_key || "",
         model: parsed.model || PROVIDER_PRESETS[(parsed.provider as LLMProviderId) || "ollama"]?.defaultModel || "llama3.2",
         base_url: parsed.base_url || (parsed.provider === "ollama" ? "http://localhost:11434" : ""),
         enable_vision: parsed.enable_vision !== undefined ? Boolean(parsed.enable_vision) : true,
@@ -146,7 +156,14 @@ export function loadLLMConfig(): LLMClientConfig {
 export function saveLLMConfig(cfg: LLMClientConfig): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+    // Never persist API keys in localStorage; keep secrets ephemeral in sessionStorage
+    const { api_key, ...nonSecretPrefs } = cfg;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nonSecretPrefs));
+    if (api_key) {
+      window.sessionStorage.setItem(SESSION_KEY_STORE, api_key);
+    } else {
+      window.sessionStorage.removeItem(SESSION_KEY_STORE);
+    }
   } catch {
     // Ignore storage write errors
   }

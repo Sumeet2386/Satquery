@@ -7,15 +7,62 @@ real-time satellite statistical telemetry and optional T1/T2 vision frames.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
+import socket
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 import httpx
 import structlog
 
 from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
+
+
+def _validate_llm_endpoint(base_url: str, provider: str) -> str:
+    """Validate user-supplied LLM endpoint URL to mitigate SSRF attacks."""
+    clean = (base_url or "").strip().rstrip("/")
+    if not clean:
+        return ""
+    parsed = urlparse(clean)
+    host = (parsed.hostname or "").lower()
+
+    if provider == "ollama":
+        allowed_ollama_hosts = {"localhost", "127.0.0.1"}
+        if parsed.scheme not in ("http", "https") or host not in allowed_ollama_hosts:
+            raise ValueError("Ollama base_url must point strictly to localhost or 127.0.0.1.")
+        port = parsed.port or 11434
+        if port != 11434:
+            raise ValueError("Ollama base_url port must be 11434.")
+        return clean
+
+    # Custom OpenAI-compatible endpoints must use HTTPS and public non-internal IPs
+    if parsed.scheme != "https" or not host:
+        raise ValueError("Custom endpoint base_url must use HTTPS.")
+    if host in ("localhost", "ip6-localhost") or host.endswith(".local") or host.endswith(".internal"):
+        raise ValueError("Custom endpoint host cannot target local/internal domains.")
+
+    try:
+        infos = socket.getaddrinfo(host, parsed.port or 443, type=socket.SOCK_STREAM)
+        for info in infos:
+            ip_obj = ipaddress.ip_address(info[4][0])
+            if (
+                ip_obj.is_private
+                or ip_obj.is_loopback
+                or ip_obj.is_link_local
+                or ip_obj.is_reserved
+                or ip_obj.is_multicast
+                or ip_obj.is_unspecified
+            ):
+                raise ValueError("Custom endpoint cannot resolve to private, loopback, or metadata IP addresses.")
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError(f"Could not resolve custom endpoint host: {exc}") from exc
+
+    return clean
 
 
 SYSTEM_INSTRUCTIONS = """You are **SatQuery AI**, a real-world multimodal geospatial & remote-sensing intelligence AI agent powered by an LLM.
@@ -291,7 +338,8 @@ async def call_real_world_llm(
 
         # ── 3. LOCAL OLLAMA ───────────────────────────────────────────────────
         if provider == "ollama":
-            ollama_base = (base_url or settings.OLLAMA_BASE_URL or "http://localhost:11434").rstrip("/")
+            raw_ollama = (base_url or settings.OLLAMA_BASE_URL or "http://localhost:11434").rstrip("/")
+            ollama_base = _validate_llm_endpoint(raw_ollama, "ollama")
             endpoint = f"{ollama_base}/api/chat"
             messages = [{"role": "system", "content": system_prompt}]
             for turn in history:
@@ -324,8 +372,8 @@ async def call_real_world_llm(
             "groq": "https://api.groq.com/openai/v1/chat/completions",
             "openrouter": "https://openrouter.ai/api/v1/chat/completions",
         }
-        if base_url:
-            clean_base = base_url.rstrip("/")
+        if provider == "custom" and base_url:
+            clean_base = _validate_llm_endpoint(base_url, "custom")
             endpoint = clean_base if clean_base.endswith("/chat/completions") else f"{clean_base}/chat/completions"
         else:
             endpoint = url_map.get(provider, url_map["openai"])

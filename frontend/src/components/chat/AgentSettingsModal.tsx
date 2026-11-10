@@ -271,7 +271,7 @@ export const AgentSettingsModal: React.FC<AgentSettingsModalProps> = ({
                 }}
               >
                 <KeyRound size={10} style={{ color: "#e07856" }} />
-                API Key (stored locally in browser)
+                API Key (session-only, cleared when tab closes)
               </label>
               <input
                 type="password"

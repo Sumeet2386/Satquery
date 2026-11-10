@@ -1,7 +1,9 @@
 """SatQuery AI — Application Configuration using Pydantic Settings."""
 
+import secrets
 from functools import lru_cache
 from typing import List
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,11 +19,11 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     APP_NAME: str = "SatQuery AI"
     APP_VERSION: str = "0.1.0"
-    APP_SECRET_KEY: str = "dev-secret-change-in-production"
-    DEBUG: bool = True
+    APP_SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    DEBUG: bool = False
 
-    # Server
-    BACKEND_HOST: str = "0.0.0.0"
+    # Server (loopback by default for local privacy; override in production)
+    BACKEND_HOST: str = "127.0.0.1"
     BACKEND_PORT: int = 8000
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
@@ -38,8 +40,8 @@ class Settings(BaseSettings):
     S3_BUCKET_NAME: str = "satquery-uploads"
     S3_REGION: str = "us-east-1"
 
-    # Auth
-    JWT_SECRET_KEY: str = "dev-jwt-secret-change-in-production"
+    # Auth (ephemeral cryptographically random fallback if not provided in .env)
+    JWT_SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
