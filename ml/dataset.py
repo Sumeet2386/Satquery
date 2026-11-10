@@ -15,8 +15,9 @@ Features:
 from __future__ import annotations
 
 import os
+from collections import OrderedDict
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 import random
 import json
 
@@ -52,12 +53,15 @@ class ChangeDetectionDataset(Dataset):
         augment: bool = True,
         seed: int = 42,
         max_samples: Optional[int] = None,
+        max_cache_images: int = 256,
     ):
         super().__init__()
         self.data_dir = Path(data_dir)
         self.patch_size = patch_size
         self.split = split
         self.augment = augment and (split == "train")
+        self.max_cache_images = max(0, int(max_cache_images))
+        self._image_cache: "OrderedDict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]" = OrderedDict()
 
         # Check if data_dir contains explicit split subfolders (e.g. data_dir/train/)
         effective_dir = self.data_dir
@@ -139,29 +143,38 @@ class ChangeDetectionDataset(Dataset):
     def __len__(self) -> int:
         return len(self.patches)
 
-    def __getitem__(self, idx: int):
-        fname, top, left = self.patches[idx]
-        p_size = self.patch_size
+    def _load_image_triple(self, fname: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Load and optionally LRU-cache decoded uint8 RGB/mask arrays to avoid 16x PNG re-decoding per epoch."""
+        if self.max_cache_images > 0 and fname in self._image_cache:
+            self._image_cache.move_to_end(fname)
+            return self._image_cache[fname]
 
         path_a = self.dir_a / fname
         path_b = self.dir_b / fname
         path_l = self.dir_l / fname
 
-        # Load RGB images and binary mask
-        img_a = Image.open(path_a).convert("RGB")
-        img_b = Image.open(path_b).convert("RGB")
-        mask = Image.open(path_l).convert("L")
+        with Image.open(path_a) as img_a, Image.open(path_b) as img_b, Image.open(path_l) as mask:
+            arr_a_full = np.asarray(img_a.convert("RGB"), dtype=np.uint8)
+            arr_b_full = np.asarray(img_b.convert("RGB"), dtype=np.uint8)
+            arr_l_full = (np.asarray(mask.convert("L"), dtype=np.uint8) > 127).astype(np.uint8)
 
-        # Crop patch: box is (left, upper, right, lower)
-        box = (left, top, left + p_size, top + p_size)
-        crop_a = img_a.crop(box)
-        crop_b = img_b.crop(box)
-        crop_l = mask.crop(box)
+        triple = (arr_a_full, arr_b_full, arr_l_full)
+        if self.max_cache_images > 0:
+            self._image_cache[fname] = triple
+            if len(self._image_cache) > self.max_cache_images:
+                self._image_cache.popitem(last=False)
+        return triple
 
-        # Convert to numpy arrays
-        arr_a = np.array(crop_a, dtype=np.float32) / 255.0
-        arr_b = np.array(crop_b, dtype=np.float32) / 255.0
-        arr_l = (np.array(crop_l, dtype=np.float32) > 127).astype(np.float32)
+    def __getitem__(self, idx: int):
+        fname, top, left = self.patches[idx]
+        p_size = self.patch_size
+
+        arr_a_full, arr_b_full, arr_l_full = self._load_image_triple(fname)
+
+        # Slice patch cleanly in NumPy without re-decoding PNGs
+        arr_a = arr_a_full[top:top + p_size, left:left + p_size].astype(np.float32) / 255.0
+        arr_b = arr_b_full[top:top + p_size, left:left + p_size].astype(np.float32) / 255.0
+        arr_l = arr_l_full[top:top + p_size, left:left + p_size].astype(np.float32)
 
         # Synchronous data augmentation across A, B, and Mask
         if self.augment:

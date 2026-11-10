@@ -163,8 +163,26 @@ def train(args):
     best_iou = 0.0
     history = []
 
+    ckpt_filename = args.checkpoint_name or ("best_s2looking_cd.pth" if "s2looking" in str(args.data_dir).lower() else "best_siamese_cd.pth")
+    checkpoint_path = output_dir / ckpt_filename
+    start_epoch = 1
+
+    if args.resume:
+        resume_path = Path(args.resume_from) if args.resume_from else checkpoint_path
+        if resume_path.exists():
+            ckpt = torch.load(resume_path, map_location=device, weights_only=False)
+            model.load_state_dict(ckpt["model_state_dict"])
+            if "optimizer_state_dict" in ckpt:
+                try:
+                    optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+                except Exception:
+                    pass
+            best_iou = float(ckpt.get("best_iou", 0.0))
+            start_epoch = int(ckpt.get("epoch", 0)) + 1
+            print(f"Resumed from {resume_path} (epoch {start_epoch - 1}, best_iou={best_iou:.4f})")
+
     # 3. Training Loop
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(start_epoch, start_epoch + args.epochs):
         epoch_start = time.time()
         model.train()
         running_loss = 0.0
@@ -184,7 +202,7 @@ def train(args):
 
             if (i + 1) % args.log_interval == 0 or (i + 1) == len(train_loader):
                 avg_l = running_loss / (i + 1)
-                sys.stdout.write(f"\rEpoch [{epoch}/{args.epochs}] Step [{i+1}/{len(train_loader)}] Loss: {avg_l:.4f}")
+                sys.stdout.write(f"\rEpoch [{epoch}/{start_epoch + args.epochs - 1}] Step [{i+1}/{len(train_loader)}] Loss: {avg_l:.4f}")
                 sys.stdout.flush()
 
         epoch_loss = running_loss / len(train_loader)
@@ -215,7 +233,8 @@ def train(args):
         metrics = calculate_metrics(probs_cat, targets_cat)
 
         epoch_time = time.time() - epoch_start
-        print(f"\nEpoch {epoch:02d}/{args.epochs:02d} Finished in {epoch_time:.1f}s | "
+        total_epochs = start_epoch + args.epochs - 1
+        print(f"\nEpoch {epoch:02d}/{total_epochs:02d} Finished in {epoch_time:.1f}s | "
               f"Train Loss: {epoch_loss:.4f} | Val Loss: {val_loss:.4f} | "
               f"Val IoU: {metrics['iou']:.4f} | Val F1: {metrics['f1']:.4f}")
 
@@ -228,14 +247,10 @@ def train(args):
         }
         history.append(record)
 
-        # 5. Checkpointing
+        # 5. Checkpointing (only overwrite best checkpoint when Val IoU strictly improves)
         is_best = metrics["iou"] > best_iou
-        ckpt_filename = args.checkpoint_name or ("best_s2looking_cd.pth" if "s2looking" in str(args.data_dir).lower() else "best_siamese_cd.pth")
-        checkpoint_path = output_dir / ckpt_filename
-
-        if is_best or epoch == args.epochs:
-            if is_best:
-                best_iou = metrics["iou"]
+        if is_best:
+            best_iou = metrics["iou"]
             torch.save({
                 "epoch": epoch,
                 "model_state_dict": model.state_dict(),
@@ -285,6 +300,8 @@ def main():
                         help="Optional limit on number of source images for testing/debugging")
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda", "mps"],
                         help="Target acceleration device")
+    parser.add_argument("--resume", action="store_true", help="Resume weights/best_iou from existing checkpoint")
+    parser.add_argument("--resume_from", type=str, default=None, help="Explicit path to checkpoint when resuming")
 
     args = parser.parse_args()
     train(args)

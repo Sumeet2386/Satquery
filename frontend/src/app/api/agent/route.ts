@@ -253,10 +253,11 @@ async function invokeLLM(opts: {
     const r = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(45_000),
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents,
-        generationConfig: { temperature: 0.25, maxOutputTokens: 1400 },
+        generationConfig: { temperature: 0.15, maxOutputTokens: 1400 },
       }),
     });
     if (!r.ok) throw new Error(`Gemini (${r.status}): ${(await r.text()).slice(0, 300)}`);
@@ -292,7 +293,8 @@ async function invokeLLM(opts: {
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
-      body: JSON.stringify({ model: chosenModel, max_tokens: 1400, temperature: 0.25, system: systemPrompt, messages }),
+      signal: AbortSignal.timeout(45_000),
+      body: JSON.stringify({ model: chosenModel, max_tokens: 1400, temperature: 0.15, system: systemPrompt, messages }),
     });
     if (!r.ok) throw new Error(`Anthropic (${r.status}): ${(await r.text()).slice(0, 300)}`);
     const data = await r.json();
@@ -318,6 +320,7 @@ async function invokeLLM(opts: {
     const r = await fetch(`${base}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(45_000),
       body: JSON.stringify({ model: chosenModel, messages, stream: false, keep_alive: "30m", options: { temperature: 0.15, num_ctx: 2048, num_predict: 650 } }),
     });
     if (!r.ok) throw new Error(`Ollama (${r.status}): ${(await r.text()).slice(0, 300)}`);
@@ -367,7 +370,8 @@ async function invokeLLM(opts: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model: chosenModel, messages, temperature: 0.25, max_tokens: 1400 }),
+    signal: AbortSignal.timeout(45_000),
+    body: JSON.stringify({ model: chosenModel, messages, temperature: 0.15, max_tokens: 1400 }),
   });
   if (!r.ok) throw new Error(`${provider} (${r.status}): ${(await r.text()).slice(0, 300)}`);
   const data = await r.json();

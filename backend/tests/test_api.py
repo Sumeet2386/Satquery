@@ -250,3 +250,31 @@ class TestAgentAndInferEndpoints:
         assert "highlighted_image_url" in data
         assert "mask_image_url" in data
         assert "pixel_stats" in data
+
+    @pytest.mark.asyncio
+    async def test_infer_pair_highres_tiled_endpoint(self, client):
+        import io
+        from PIL import Image, ImageDraw
+
+        img_a = Image.new("RGB", (1024, 1024), (40, 80, 40))
+        img_b = img_a.copy()
+        draw = ImageDraw.Draw(img_b)
+        draw.rectangle([200, 200, 340, 340], fill=(215, 205, 195))
+
+        buf_a, buf_b = io.BytesIO(), io.BytesIO()
+        img_a.save(buf_a, format="PNG")
+        img_b.save(buf_b, format="PNG")
+
+        response = await client.post(
+            "/api/infer-pair",
+            files={
+                "pre_image": ("pre_1024.png", buf_a.getvalue(), "image/png"),
+                "post_image": ("post_1024.png", buf_b.getvalue(), "image/png"),
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["tile_width_px"] == 1024
+        assert data["highlighted_image_url"].startswith("data:image/jpeg;base64,")
+        assert data["mask_image_url"].startswith("data:image/png;base64,")
