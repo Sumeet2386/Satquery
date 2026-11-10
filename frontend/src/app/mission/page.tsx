@@ -29,10 +29,11 @@ import {
 } from "../../lib/llmConfig";
 
 export default function OdysseusMissionControl() {
-  const [currentScenarioIndex, setCurrentScenarioIndex] = useState<number>(0);
-  const scenario = MOCK_SCENARIOS[currentScenarioIndex] || MOCK_SCENARIOS[0];
+  const [currentScenarioIndex, setCurrentScenarioIndex] = useState<number>(-1);
+  const scenario: MissionScenario | null =
+    currentScenarioIndex >= 0 ? MOCK_SCENARIOS[currentScenarioIndex] || null : null;
 
-  const [files, setFiles] = useState<GeoTIFFMetadata[]>(scenario?.files || []);
+  const [files, setFiles] = useState<GeoTIFFMetadata[]>([]);
   const [activeSection, setActiveSection] = useState<NavSection>("chat");
 
   const [activeLiveAnalysis, setActiveLiveAnalysis] = useState<LiveAnalysisResult | null>(null);
@@ -41,7 +42,7 @@ export default function OdysseusMissionControl() {
   const [backendOnline, setBackendOnline] = useState<boolean>(false);
   const [backendDevice, setBackendDevice] = useState<string>("mps");
 
-  const [mapCenter, setMapCenter] = useState<[number, number]>(scenario.files[0]?.center || [17.695, 83.300]);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([17.695, 83.300]);
   const [mapZoom, setMapZoom] = useState<number>(14);
   const [groundingBoxes, setGroundingBoxes] = useState<GroundingBox[]>([]);
   const [showHeatmap, setShowHeatmap] = useState<boolean>(false);
@@ -77,17 +78,7 @@ export default function OdysseusMissionControl() {
     return () => clearInterval(interval);
   }, []);
 
-  // Automatically initialize real-time satellite imagery analysis on mount (zero preset solutions)
-  const isInitialMounted = useRef(false);
-  useEffect(() => {
-    if (isInitialMounted.current) return;
-    isInitialMounted.current = true;
-    handleAnalyzeLivePair(
-      "/database_samples/test_100/pre.png",
-      "/database_samples/test_100/post.png",
-      "test_100 · High-Resolution Urban Transformation"
-    );
-  }, []);
+  // Workspace starts clean without any pre-loaded default image pair; user uploads or picks imagery explicitly.
 
   const computeInputConfig = (currentFiles: GeoTIFFMetadata[]): InputConfiguration => {
     if (currentFiles.length === 0) return "Single Optical";
@@ -274,11 +265,11 @@ export default function OdysseusMissionControl() {
       text: "",
       confidence_tier: confidenceTier,
       confidence_score: confidenceScore,
-      scenario_id: activeLiveAnalysis ? "live-uploaded-pair" : targetScenario.id,
+      scenario_id: activeLiveAnalysis ? "live-uploaded-pair" : targetScenario?.id || "empty-workspace",
       execution_trace: traceSteps,
       grounding_boxes: boxes,
       change_stats: changeStats,
-      fusion_note: targetScenario.response.fusion_note,
+      fusion_note: targetScenario?.response.fusion_note,
       has_heatmap: hasHeatmap,
       has_swipe_comparison: hasSwipeComp,
       pre_image_url: activePreUrl,
@@ -509,7 +500,20 @@ export default function OdysseusMissionControl() {
             <div style={{ width: "280px", flexShrink: 0, borderRight: "1px solid #1c2028", overflow: "hidden", display: "flex", flexDirection: "column" }}>
               <UploadZone
                 files={files}
-                onFilesChange={(newFiles) => setFiles(newFiles)}
+                onFilesChange={(newFiles) => {
+                  setFiles(newFiles);
+                  if (newFiles.length === 0) {
+                    setCurrentScenarioIndex(-1);
+                    setActiveLiveAnalysis(null);
+                    setLiveFilesPair(null);
+                    setPreImageUrl(undefined);
+                    setPostImageUrl(undefined);
+                    setGroundingBoxes([]);
+                    setHasSwipe(false);
+                    setShowHeatmap(false);
+                    setLatestResponse(null);
+                  }
+                }}
                 inputConfig={inputConfig}
                 onSelectPreset={handleSelectPreset}
                 onAnalyzeLivePair={handleAnalyzeLivePair}
@@ -529,12 +533,12 @@ export default function OdysseusMissionControl() {
                 hasSwipeComparison={hasSwipe}
                 preImageUrl={preImageUrl}
                 postImageUrl={postImageUrl}
-                highlightedImageUrl={latestResponse?.highlighted_image_url || activeLiveAnalysis?.highlightedImageUrl || scenario.response.highlighted_image_url}
-                annotatedImageUrl={latestResponse?.annotated_image_url || activeLiveAnalysis?.annotatedImageUrl || scenario.response.annotated_image_url}
-                maskImageUrl={latestResponse?.mask_image_url || activeLiveAnalysis?.maskImageUrl || scenario.response.mask_image_url}
-                maxDistKm={latestResponse?.max_dist_km || activeLiveAnalysis?.maxDistKm || scenario.response.max_dist_km}
-                totalAreaM2={latestResponse?.total_area_m2 || activeLiveAnalysis?.totalAreaM2 || scenario.response.total_area_m2}
-                activeScenarioId={activeLiveAnalysis ? (activeLiveAnalysis.preImageUrl || "live-imagery") : scenario.id}
+                highlightedImageUrl={latestResponse?.highlighted_image_url || activeLiveAnalysis?.highlightedImageUrl}
+                annotatedImageUrl={latestResponse?.annotated_image_url || activeLiveAnalysis?.annotatedImageUrl}
+                maskImageUrl={latestResponse?.mask_image_url || activeLiveAnalysis?.maskImageUrl}
+                maxDistKm={latestResponse?.max_dist_km || activeLiveAnalysis?.maxDistKm}
+                totalAreaM2={latestResponse?.total_area_m2 || activeLiveAnalysis?.totalAreaM2}
+                activeScenarioId={activeLiveAnalysis ? (activeLiveAnalysis.preImageUrl || "live-imagery") : (scenario?.id || "empty-workspace")}
               />
             </div>
 

@@ -157,7 +157,7 @@ interface ChatPanelProps {
   onSendMessage: (query: string) => void;
   isProcessing: boolean;
   currentRunningStep?: ExecutionTraceStep | null;
-  currentScenario: MissionScenario;
+  currentScenario?: MissionScenario | null;
   onOpenReport: () => void;
   files: GeoTIFFMetadata[];
   llmConfig?: LLMClientConfig;

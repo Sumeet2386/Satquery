@@ -92,6 +92,8 @@ export const MapContainerWrapper: React.FC<MapContainerWrapperProps> = ({
       lastActiveScenarioRef.current = activeScenarioId;
       if (highlightedImageUrl || annotatedImageUrl) {
         setViewMode("highlighted");
+      } else {
+        setViewMode("map");
       }
     }
   }, [activeScenarioId, highlightedImageUrl, annotatedImageUrl]);
@@ -263,18 +265,54 @@ export const MapContainerWrapper: React.FC<MapContainerWrapperProps> = ({
 
       {/* Main Display Area */}
       {viewMode === "map" && (
-        <DynamicMissionMap
-          center={center}
-          zoom={zoom}
-          files={files}
-          groundingBoxes={groundingBoxes}
-          showHeatmap={showHeatmap}
-          onToggleHeatmap={onToggleHeatmap}
-          hasSwipeComparison={hasSwipeComparison}
-          showSwipe={false}
-          onToggleSwipe={() => setViewMode("swipe")}
-          activeScenarioId={activeScenarioId}
-        />
+        <>
+          <DynamicMissionMap
+            center={center}
+            zoom={zoom}
+            files={files}
+            groundingBoxes={groundingBoxes}
+            showHeatmap={showHeatmap}
+            onToggleHeatmap={onToggleHeatmap}
+            hasSwipeComparison={hasSwipeComparison}
+            showSwipe={false}
+            onToggleSwipe={() => setViewMode("swipe")}
+            activeScenarioId={activeScenarioId}
+          />
+          {!hasHighlighted && !preImageUrl && !postImageUrl && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 20,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: "none",
+              }}
+            >
+              <div
+                style={{
+                  background: "rgba(13, 15, 18, 0.88)",
+                  border: "1px solid #252b36",
+                  borderRadius: 8,
+                  padding: "18px 24px",
+                  textAlign: "center",
+                  maxWidth: 380,
+                  backdropFilter: "blur(8px)",
+                  boxShadow: "0 12px 36px rgba(0,0,0,0.65)",
+                }}
+              >
+                <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#e07856", marginBottom: 6 }}>
+                  AWAITING PRE / POST SATELLITE IMAGERY
+                </div>
+                <div style={{ fontFamily: "sans-serif", fontSize: 11.5, color: "#8e9bb0", lineHeight: 1.5 }}>
+                  Upload a <strong>Pre-Event (T1)</strong> and <strong>Post-Event (T2)</strong> image in the{" "}
+                  <strong>Raster Ingestion</strong> panel on the left to start live bi-temporal change analysis.
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {viewMode === "swipe" && preImageUrl && postImageUrl && (
@@ -345,7 +383,7 @@ export const MapContainerWrapper: React.FC<MapContainerWrapperProps> = ({
                 <Ruler size={13} style={{ color: "#e07856" }} />
                 <span style={{ fontSize: 10, color: "#748094", textTransform: "uppercase" }}>Visible Change Span:</span>
                 <span style={{ fontSize: 13, fontWeight: 800, color: "#e07856" }}>
-                  {maxDistKm ? `${maxDistKm} km (${Math.round(maxDistKm * 1000)}m)` : "0.44 km (440m)"}
+                  {maxDistKm !== undefined ? `${maxDistKm} km (${Math.round(maxDistKm * 1000)}m)` : "0.00 km (0m)"}
                 </span>
               </div>
 
@@ -362,7 +400,7 @@ export const MapContainerWrapper: React.FC<MapContainerWrapperProps> = ({
               <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.03)", padding: "2px 8px", borderRadius: 4, border: "1px solid #1c2028" }}>
                 <span style={{ fontSize: 9, color: "#48b27e", fontWeight: 700 }}>T1 Baseline</span>
                 <span style={{ fontSize: 9, color: "#748094" }}>➔</span>
-                <span style={{ fontSize: 9, color: "#e07856", fontWeight: 700 }}>T2 +{totalAreaM2 ? totalAreaM2.toLocaleString() : "29,711"} m² Added</span>
+                <span style={{ fontSize: 9, color: "#e07856", fontWeight: 700 }}>T2 +{totalAreaM2 ? totalAreaM2.toLocaleString() : "0"} m² Added</span>
               </div>
 
               <div style={{ fontSize: 10, color: "#4b5565" }}>

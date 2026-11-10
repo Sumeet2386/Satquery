@@ -21,7 +21,7 @@ interface SidebarNavProps {
   onSelectSection: (section: NavSection) => void;
   isProcessing: boolean;
   filesCount: number;
-  currentScenario: MissionScenario;
+  currentScenario?: MissionScenario | null;
   onSelectScenario: (scenario: MissionScenario) => void;
   backendOnline?: boolean;
   backendDevice?: string;
@@ -242,7 +242,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           </span>
         </div>
         {MOCK_SCENARIOS.map((s) => {
-          const isSelected = currentScenario.id === s.id;
+          const isSelected = currentScenario?.id === s.id;
           const distKm = s.response.max_dist_km || 0.3;
           return (
             <button

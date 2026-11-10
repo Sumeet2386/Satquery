@@ -7,7 +7,7 @@ import {
 } from "@/lib/statisticalEngine";
 
 export function buildAnalysisContext(
-  currentScenario: MissionScenario,
+  currentScenario: MissionScenario | null | undefined,
   liveAnalysis: LiveAnalysisResult | null
 ): ActiveAnalysisContext {
   if (liveAnalysis) {
@@ -30,6 +30,22 @@ export function buildAnalysisContext(
     };
   }
 
+  if (!currentScenario) {
+    return {
+      title: "Awaiting Imagery Upload",
+      scene_id: "empty-workspace",
+      pre_filename: "None",
+      post_filename: "None",
+      gsd_m: 0.5,
+      tile_width_px: 1024,
+      tile_height_px: 1024,
+      total_area_m2: 0,
+      change_pct: 0,
+      max_dist_km: 0,
+      clusters: [],
+    };
+  }
+
   const resp = currentScenario.response;
   return {
     title: currentScenario.title,
@@ -47,7 +63,7 @@ export function buildAnalysisContext(
 }
 
 export interface AgentContext {
-  currentScenario: MissionScenario;
+  currentScenario: MissionScenario | null;
   liveAnalysis: LiveAnalysisResult | null;
   filesCount: number;
   hasSar: boolean;
@@ -90,7 +106,9 @@ export function resolveAgentReasoning(
   if (isGreeting) {
     const activeTarget = liveAnalysis
       ? "your live analyzed bi-temporal image pair"
-      : `the active satellite observation tile (**${currentScenario.title}**)`;
+      : currentScenario
+      ? `the active satellite observation tile (**${currentScenario.title}**)`
+      : "an empty workspace awaiting your Pre-Event (T1) & Post-Event (T2) imagery";
 
     const answerText = (
       `**Greetings, Commander.** I am **SatQuery AI**, your autonomous multimodal satellite intelligence agent.\n\n` +
@@ -101,15 +119,16 @@ export function resolveAgentReasoning(
       `3. **Quantify Ground Footprints**: Measure modified surface area in **square meters ($\text{m}^2$)** and **$\text{km}^2$**.\n` +
       `4. **Properly Label Post-Event Structures**: Classify detected modifications into verified categories (*Residential Housing Footprint*, *Road / Corridor Infrastructure*, *Commercial Structure*, *Land Clearing*).\n` +
       `5. **Multi-Sensor Fusion**: Ground targets across Sentinel-2 (VNIR), Landsat-8, Cartosat-3, and Sentinel-1 (C-band SAR radar) for all-weather monitoring.\n\n` +
-      `Currently, I have **${activeTarget}** loaded on the map canvas.\n\n` +
+      `Currently, I have **${activeTarget}**.\n\n` +
       `**Try asking me right now:**\n` +
       `• *\"What changes occurred between both images?\"*\n` +
       `• *\"What is the distance in km over which changes are visible?\"*\n` +
       `• *\"Calculate the total modified ground area\"*\n` +
       `• *\"Highlight the changes on the post-event image\"*\n` +
-      `• Or click **Live Image Pair Ingestion** in the left drawer to upload your own Pre/Post event images!`
+      `• Or upload your own Pre/Post event images in **Live Image Pair Ingestion** on the left!`
     );
 
+    const resp = currentScenario?.response;
     return {
       answerText,
       confidenceTier: "HIGH",
@@ -119,23 +138,23 @@ export function resolveAgentReasoning(
           step: 1,
           tool: "conversational_intent_parser",
           tool_display_name: "Conversational Intent & Context Resolver",
-          params: { intent: "greeting", active_scene: currentScenario.id },
+          params: { intent: "greeting", active_scene: currentScenario?.id || "empty" },
           duration_ms: 120,
           status: "success",
           output: { intent_classified: "greeting", session_active: true },
         },
       ],
-      groundingBoxes: liveAnalysis ? liveAnalysis.clusters : (currentScenario.response.grounding_boxes || []),
-      changeStats: liveAnalysis ? liveAnalysis.changeStats : currentScenario.response.change_stats,
-      hasHeatmap: Boolean(liveAnalysis) || Boolean(currentScenario.response.has_heatmap),
-      hasSwipe: Boolean(liveAnalysis) || Boolean(currentScenario.response.has_swipe_comparison),
-      preImageUrl: liveAnalysis ? liveAnalysis.preImageUrl : currentScenario.response.pre_image_url,
-      postImageUrl: liveAnalysis ? liveAnalysis.postImageUrl : currentScenario.response.post_image_url,
-      highlightedImageUrl: liveAnalysis ? liveAnalysis.highlightedImageUrl : currentScenario.response.highlighted_image_url,
-      annotatedImageUrl: liveAnalysis ? liveAnalysis.annotatedImageUrl : currentScenario.response.annotated_image_url,
-      maskImageUrl: liveAnalysis ? liveAnalysis.maskImageUrl : currentScenario.response.mask_image_url,
-      maxDistKm: liveAnalysis ? liveAnalysis.maxDistKm : currentScenario.response.max_dist_km,
-      totalAreaM2: liveAnalysis ? liveAnalysis.totalAreaM2 : currentScenario.response.total_area_m2,
+      groundingBoxes: liveAnalysis ? liveAnalysis.clusters : (resp?.grounding_boxes || []),
+      changeStats: liveAnalysis ? liveAnalysis.changeStats : resp?.change_stats,
+      hasHeatmap: Boolean(liveAnalysis) || Boolean(resp?.has_heatmap),
+      hasSwipe: Boolean(liveAnalysis) || Boolean(resp?.has_swipe_comparison),
+      preImageUrl: liveAnalysis ? liveAnalysis.preImageUrl : resp?.pre_image_url,
+      postImageUrl: liveAnalysis ? liveAnalysis.postImageUrl : resp?.post_image_url,
+      highlightedImageUrl: liveAnalysis ? liveAnalysis.highlightedImageUrl : resp?.highlighted_image_url,
+      annotatedImageUrl: liveAnalysis ? liveAnalysis.annotatedImageUrl : resp?.annotated_image_url,
+      maskImageUrl: liveAnalysis ? liveAnalysis.maskImageUrl : resp?.mask_image_url,
+      maxDistKm: liveAnalysis ? liveAnalysis.maxDistKm : resp?.max_dist_km,
+      totalAreaM2: liveAnalysis ? liveAnalysis.totalAreaM2 : resp?.total_area_m2,
     };
   }
 
@@ -160,7 +179,9 @@ export function resolveAgentReasoning(
   if (isCapabilityQuery) {
     const activeTarget = liveAnalysis
       ? "your live analyzed bi-temporal image pair"
-      : `the active satellite observation tile (**${currentScenario.title}**)`;
+      : currentScenario
+      ? `the active satellite observation tile (**${currentScenario.title}**)`
+      : "no imagery loaded yet (upload T1 & T2 images on the left)";
 
     const answerText = (
       `### SatQuery AI: Real-World Purpose & Practical Applications\n\n` +
@@ -171,13 +192,14 @@ export function resolveAgentReasoning(
       `3. **Metric Distance & Spatial Span**: The agent converts pixel offsets into ground kilometers ($d = \\Delta_{px} \\times \\text{GSD} / 1000$). It tells you how far apart detected changes are across the terrain.\n` +
       `4. **Proper Structural Labeling**: Changes on the post-event image are explicitly labeled (*Residential Housing Footprint*, *Road / Corridor Infrastructure*, *Commercial Structure*, *Land Clearing*).\n` +
       `5. **Multi-Sensor Fusion**: Combines optical imagery (Sentinel-2, Cartosat-3) with radar imagery (Sentinel-1 SAR) to see through clouds and monsoons.\n\n` +
-      `**Current Viewport State:** Loaded with **${activeTarget}**.\n\n` +
+      `**Current Viewport State:** ${activeTarget}.\n\n` +
       `*Ask a specific question about the active imagery, such as:*\n` +
       `• *\"What changes occurred between both images?\"*\n` +
       `• *\"What is the distance in km?\"*\n` +
       `• *\"Calculate total footprint area\"*`
     );
 
+    const resp = currentScenario?.response;
     return {
       answerText,
       confidenceTier: "HIGH",
@@ -193,17 +215,17 @@ export function resolveAgentReasoning(
           output: { model: "Siamese-CD + LEVIR-CC", gsd_m: 0.5 },
         },
       ],
-      groundingBoxes: liveAnalysis ? liveAnalysis.clusters : (currentScenario.response.grounding_boxes || []),
-      changeStats: liveAnalysis ? liveAnalysis.changeStats : currentScenario.response.change_stats,
-      hasHeatmap: Boolean(liveAnalysis) || Boolean(currentScenario.response.has_heatmap),
-      hasSwipe: Boolean(liveAnalysis) || Boolean(currentScenario.response.has_swipe_comparison),
-      preImageUrl: liveAnalysis ? liveAnalysis.preImageUrl : currentScenario.response.pre_image_url,
-      postImageUrl: liveAnalysis ? liveAnalysis.postImageUrl : currentScenario.response.post_image_url,
-      highlightedImageUrl: liveAnalysis ? liveAnalysis.highlightedImageUrl : currentScenario.response.highlighted_image_url,
-      annotatedImageUrl: liveAnalysis ? liveAnalysis.annotatedImageUrl : currentScenario.response.annotated_image_url,
-      maskImageUrl: liveAnalysis ? liveAnalysis.maskImageUrl : currentScenario.response.mask_image_url,
-      maxDistKm: liveAnalysis ? liveAnalysis.maxDistKm : currentScenario.response.max_dist_km,
-      totalAreaM2: liveAnalysis ? liveAnalysis.totalAreaM2 : currentScenario.response.total_area_m2,
+      groundingBoxes: liveAnalysis ? liveAnalysis.clusters : (resp?.grounding_boxes || []),
+      changeStats: liveAnalysis ? liveAnalysis.changeStats : resp?.change_stats,
+      hasHeatmap: Boolean(liveAnalysis) || Boolean(resp?.has_heatmap),
+      hasSwipe: Boolean(liveAnalysis) || Boolean(resp?.has_swipe_comparison),
+      preImageUrl: liveAnalysis ? liveAnalysis.preImageUrl : resp?.pre_image_url,
+      postImageUrl: liveAnalysis ? liveAnalysis.postImageUrl : resp?.post_image_url,
+      highlightedImageUrl: liveAnalysis ? liveAnalysis.highlightedImageUrl : resp?.highlighted_image_url,
+      annotatedImageUrl: liveAnalysis ? liveAnalysis.annotatedImageUrl : resp?.annotated_image_url,
+      maskImageUrl: liveAnalysis ? liveAnalysis.maskImageUrl : resp?.mask_image_url,
+      maxDistKm: liveAnalysis ? liveAnalysis.maxDistKm : resp?.max_dist_km,
+      totalAreaM2: liveAnalysis ? liveAnalysis.totalAreaM2 : resp?.total_area_m2,
     };
   }
 
@@ -211,12 +233,12 @@ export function resolveAgentReasoning(
   const activeCtx = buildAnalysisContext(currentScenario, liveAnalysis);
   const audit = computeStatisticalAuditTS(activeCtx);
   const statResult = answerQueryStatisticallyTS(query, audit);
-  const resp = currentScenario.response;
+  const resp = currentScenario?.response;
 
   return {
     answerText: statResult.answer,
     confidenceTier: audit.confidence_statistics.mean_pct >= 85 ? "HIGH" : "MEDIUM",
-    confidenceScore: audit.confidence_statistics.mean_pct || (liveAnalysis ? 96.2 : resp.confidence_score),
+    confidenceScore: audit.confidence_statistics.mean_pct || (liveAnalysis ? 96.2 : resp?.confidence_score || 94.0),
     traceSteps: [
       {
         step: 1,
@@ -232,16 +254,16 @@ export function resolveAgentReasoning(
         },
       },
     ],
-    groundingBoxes: liveAnalysis ? liveAnalysis.clusters : (resp.grounding_boxes || []),
-    changeStats: liveAnalysis ? liveAnalysis.changeStats : resp.change_stats,
-    hasHeatmap: liveAnalysis ? true : Boolean(resp.has_heatmap),
-    hasSwipe: liveAnalysis ? true : Boolean(resp.has_swipe_comparison),
-    preImageUrl: liveAnalysis ? liveAnalysis.preImageUrl : resp.pre_image_url,
-    postImageUrl: liveAnalysis ? liveAnalysis.postImageUrl : resp.post_image_url,
-    highlightedImageUrl: liveAnalysis ? liveAnalysis.highlightedImageUrl : resp.highlighted_image_url,
-    annotatedImageUrl: liveAnalysis ? liveAnalysis.annotatedImageUrl : resp.annotated_image_url,
-    maskImageUrl: liveAnalysis ? liveAnalysis.maskImageUrl : resp.mask_image_url,
-    maxDistKm: liveAnalysis ? liveAnalysis.maxDistKm : resp.max_dist_km,
-    totalAreaM2: liveAnalysis ? liveAnalysis.totalAreaM2 : resp.total_area_m2,
+    groundingBoxes: liveAnalysis ? liveAnalysis.clusters : (resp?.grounding_boxes || []),
+    changeStats: liveAnalysis ? liveAnalysis.changeStats : resp?.change_stats,
+    hasHeatmap: liveAnalysis ? true : Boolean(resp?.has_heatmap),
+    hasSwipe: liveAnalysis ? true : Boolean(resp?.has_swipe_comparison),
+    preImageUrl: liveAnalysis ? liveAnalysis.preImageUrl : resp?.pre_image_url,
+    postImageUrl: liveAnalysis ? liveAnalysis.postImageUrl : resp?.post_image_url,
+    highlightedImageUrl: liveAnalysis ? liveAnalysis.highlightedImageUrl : resp?.highlighted_image_url,
+    annotatedImageUrl: liveAnalysis ? liveAnalysis.annotatedImageUrl : resp?.annotated_image_url,
+    maskImageUrl: liveAnalysis ? liveAnalysis.maskImageUrl : resp?.mask_image_url,
+    maxDistKm: liveAnalysis ? liveAnalysis.maxDistKm : resp?.max_dist_km,
+    totalAreaM2: liveAnalysis ? liveAnalysis.totalAreaM2 : resp?.total_area_m2,
   };
 }

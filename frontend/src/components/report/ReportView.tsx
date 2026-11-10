@@ -19,7 +19,7 @@ import {
 import { THEME_CONFIG } from "../../constants/theme";
 
 interface ReportViewProps {
-  scenario: MissionScenario;
+  scenario?: MissionScenario | null;
   files: GeoTIFFMetadata[];
   latestResponse: AssistantResponse | null;
   onBackToChat: () => void;
@@ -35,10 +35,10 @@ export const ReportView: React.FC<ReportViewProps> = ({
 }) => {
   const [downloadTooltip, setDownloadTooltip] = useState(false);
 
-  const groundingBoxes: GroundingBox[] = latestResponse?.grounding_boxes || scenario.response.grounding_boxes || [];
-  const changeStats = latestResponse?.change_stats || scenario.response.change_stats;
-  const confidenceTier = latestResponse?.confidence_tier || scenario.response.confidence_tier || "HIGH";
-  const confidenceScore = latestResponse?.confidence_score || scenario.response.confidence_score || 96.0;
+  const groundingBoxes: GroundingBox[] = latestResponse?.grounding_boxes || scenario?.response.grounding_boxes || [];
+  const changeStats = latestResponse?.change_stats || scenario?.response.change_stats;
+  const confidenceTier = latestResponse?.confidence_tier || scenario?.response.confidence_tier || "HIGH";
+  const confidenceScore = latestResponse?.confidence_score || scenario?.response.confidence_score || 96.0;
 
   const badgeConfig = THEME_CONFIG.confidenceBadges[confidenceTier];
 
@@ -292,7 +292,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
               whiteSpace: "pre-line",
             }}
           >
-            {latestResponse?.text || scenario.response.text}
+            {latestResponse?.text || scenario?.response.text || "Upload Pre-Event (T1) and Post-Event (T2) imagery and run an analysis to generate a detailed mission report."}
           </div>
         </div>
 

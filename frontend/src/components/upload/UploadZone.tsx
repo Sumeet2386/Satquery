@@ -352,7 +352,13 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
             >
               <span>Loaded Tiles ({files.length})</span>
               <button
-                onClick={() => onFilesChange([])}
+                onClick={() => {
+                  setLivePreFile(null);
+                  setLivePostFile(null);
+                  setPrePreview(null);
+                  setPostPreview(null);
+                  onFilesChange([]);
+                }}
                 style={{
                   fontFamily: "monospace",
                   fontSize: 9,
