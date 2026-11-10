@@ -21,6 +21,7 @@ import {
 import { checkBackendHealth, executeAgentQuery } from "../../lib/api";
 import { analyzeLiveImagePair, LiveAnalysisResult } from "../../lib/liveImageAnalysis";
 import { resolveAgentReasoning, buildAnalysisContext } from "../../lib/agentReasoner";
+import { downloadSatelliteReportPdf } from "../../lib/pdfReportGenerator";
 import {
   LLMClientConfig,
   loadLLMConfig,
@@ -471,6 +472,21 @@ export default function OdysseusMissionControl() {
     }
   };
 
+  const handleDownloadPdf = async (msg?: AssistantResponse) => {
+    const reportId = `SATQUERY-EO-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const title =
+      activeLiveAnalysis?.title ||
+      scenario?.title ||
+      (files.length >= 2 ? `${files[0].filename} vs ${files[1].filename}` : "Bi-Temporal Satellite Analysis");
+    await downloadSatelliteReportPdf({
+      reportId,
+      title,
+      files,
+      liveAnalysis: activeLiveAnalysis,
+      latestResponse: msg || latestResponse,
+    });
+  };
+
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw", background: "#090a0d", color: "#d0d7e2", overflow: "hidden" }}>
       {/* Sidebar */}
@@ -491,6 +507,7 @@ export default function OdysseusMissionControl() {
           <ReportView
             scenario={scenario}
             files={files}
+            liveAnalysis={activeLiveAnalysis}
             latestResponse={latestResponse}
             onBackToChat={() => setActiveSection("chat")}
           />
@@ -551,6 +568,7 @@ export default function OdysseusMissionControl() {
                 currentRunningStep={currentRunningStep}
                 currentScenario={scenario}
                 onOpenReport={() => setActiveSection("reports")}
+                onDownloadPdf={handleDownloadPdf}
                 files={files}
                 llmConfig={llmConfig}
                 onOpenSettings={() => setSettingsModalOpen(true)}

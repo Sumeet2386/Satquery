@@ -11,6 +11,7 @@ import {
   Loader2,
   Satellite,
   Settings2,
+  Download,
 } from "lucide-react";
 import {
   ChatMessage,
@@ -159,6 +160,7 @@ interface ChatPanelProps {
   currentRunningStep?: ExecutionTraceStep | null;
   currentScenario?: MissionScenario | null;
   onOpenReport: () => void;
+  onDownloadPdf?: (msg?: AssistantResponse) => void;
   files: GeoTIFFMetadata[];
   llmConfig?: LLMClientConfig;
   onOpenSettings?: () => void;
@@ -179,6 +181,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   currentRunningStep,
   currentScenario,
   onOpenReport,
+  onDownloadPdf,
   files,
   llmConfig,
   onOpenSettings,
@@ -664,6 +667,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                       justifyContent: "space-between",
                       borderTop: "1px solid #1c2028",
                       paddingTop: 7,
+                      gap: 8,
                     }}
                   >
                     <button
@@ -684,11 +688,32 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                       <FileText size={11} />
                       Open Mission Report →
                     </button>
-                    <span
-                      style={{ fontFamily: "monospace", fontSize: 9, color: "#323a48" }}
-                    >
-                      ISRO-SIH26167
-                    </span>
+                    {onDownloadPdf && (asstMsg.pre_image_url || asstMsg.post_image_url || (asstMsg.grounding_boxes && asstMsg.grounding_boxes.length > 0)) ? (
+                      <button
+                        onClick={() => onDownloadPdf(asstMsg)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          fontFamily: "monospace",
+                          fontSize: 9.5,
+                          fontWeight: 700,
+                          color: "#090a0d",
+                          background: "#48b27e",
+                          border: "none",
+                          borderRadius: 4,
+                          padding: "3px 8px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Download size={10} />
+                        Download PDF
+                      </button>
+                    ) : (
+                      <span style={{ fontFamily: "monospace", fontSize: 9, color: "#323a48" }}>
+                        SATQUERY-EO
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
