@@ -2,7 +2,6 @@
 
 import React, { useState, useRef } from "react";
 import {
-  UploadCloud,
   FileCode,
   Layers,
   Trash2,
@@ -15,7 +14,7 @@ import {
   Loader2,
   FileImage,
 } from "lucide-react";
-import { GeoTIFFMetadata, InputConfiguration, SensorType } from "../../types/satquery";
+import { GeoTIFFMetadata, InputConfiguration } from "../../types/satquery";
 import { THEME_CONFIG } from "../../constants/theme";
 
 interface UploadZoneProps {
@@ -27,31 +26,18 @@ interface UploadZoneProps {
   isProcessing?: boolean;
 }
 
-const REALTIME_BENCHMARK_PAIRS = [
-  { id: "test_100", label: "test_100 · Urban Transformation", span: "0.55 km", tag: "EO" },
-  { id: "test_14", label: "test_14 · Industrial Logistics Depot", span: "0.27 km", tag: "EO" },
-  { id: "test_28", label: "test_28 · Highway & Corridor Works", span: "0.63 km", tag: "EO" },
-  { id: "test_1", label: "test_1 · Residential Footprints", span: "0.11 km", tag: "EO" },
-  { id: "test_10", label: "test_10 · High-Density Commercial", span: "0.28 km", tag: "EO" },
-  { id: "test_42", label: "test_42 · Commercial Foundations", span: "0.48 km", tag: "EO" },
-  { id: "test_2", label: "test_2 · Suburban Housing Cluster", span: "0.55 km", tag: "EO" },
-];
-
 export const UploadZone: React.FC<UploadZoneProps> = ({
   files,
   onFilesChange,
   inputConfig,
-  onSelectPreset,
   onAnalyzeLivePair,
   isProcessing = false,
 }) => {
-  const [isDragging, setIsDragging] = useState(false);
   const [selectedFileForModal, setSelectedFileForModal] = useState<GeoTIFFMetadata | null>(null);
   const [livePreFile, setLivePreFile] = useState<File | null>(null);
   const [livePostFile, setLivePostFile] = useState<File | null>(null);
   const [prePreview, setPrePreview] = useState<string | null>(null);
   const [postPreview, setPostPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputPreRef = useRef<HTMLInputElement>(null);
   const fileInputPostRef = useRef<HTMLInputElement>(null);
 
@@ -68,67 +54,6 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
     setPostPreview(URL.createObjectURL(f));
     if (livePreFile) {
       onAnalyzeLivePair?.(livePreFile, f);
-    }
-  };
-
-  const parseMockMetadata = (file: File, index: number): GeoTIFFMetadata => {
-    const isSar = /sar|s1|risat/i.test(file.name);
-    const isLandsat = /landsat|l8/i.test(file.name);
-    const isCartosat = /carto|c3/i.test(file.name);
-    let sensor_hint: SensorType = "sentinel2";
-    if (isSar) sensor_hint = "sentinel1_sar";
-    else if (isLandsat) sensor_hint = "landsat8";
-    else if (isCartosat) sensor_hint = "cartosat3";
-    const data_type: "Optical" | "SAR" = isSar ? "SAR" : "Optical";
-    return {
-      id: `custom_upl_${Date.now()}_${index}`,
-      filename: file.name,
-      sensor_hint,
-      bands: isSar ? 2 : 12,
-      crs: "EPSG:32643",
-      resolution_m: isSar ? 10.0 : 10.0,
-      width: 1024,
-      height: 1024,
-      acquisition_date: new Date().toISOString(),
-      bbox: [18.910, 72.780, 19.010, 72.910],
-      center: [18.960, 72.845],
-      thumbnail_url: URL.createObjectURL(file),
-      data_type,
-      file_size_mb: Number((file.size / 1048576 || 24.5).toFixed(1)),
-    };
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files?.length > 0) {
-      const dropped = Array.from(e.dataTransfer.files);
-      if (dropped.length >= 2) {
-        handleSelectPre(dropped[0]);
-        handleSelectPost(dropped[1]);
-        onAnalyzeLivePair?.(dropped[0], dropped[1]);
-      } else if (dropped.length === 1) {
-        if (!livePreFile) handleSelectPre(dropped[0]);
-        else handleSelectPost(dropped[0]);
-      }
-      const parsed = dropped.slice(0, 2).map(parseMockMetadata);
-      onFilesChange(parsed);
-    }
-  };
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const selected = Array.from(e.target.files);
-      if (selected.length >= 2) {
-        handleSelectPre(selected[0]);
-        handleSelectPost(selected[1]);
-        onAnalyzeLivePair?.(selected[0], selected[1]);
-      } else if (selected.length === 1) {
-        if (!livePreFile) handleSelectPre(selected[0]);
-        else handleSelectPost(selected[0]);
-      }
-      const parsed = selected.slice(0, 2).map(parseMockMetadata);
-      onFilesChange(parsed);
     }
   };
 
@@ -277,6 +202,12 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
             {/* Slot A: Pre-Event */}
             <div
               onClick={() => fileInputPreRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const f = e.dataTransfer.files?.[0];
+                if (f) handleSelectPre(f);
+              }}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -320,6 +251,12 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
             {/* Slot B: Post-Event */}
             <div
               onClick={() => fileInputPostRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const f = e.dataTransfer.files?.[0];
+                if (f) handleSelectPost(f);
+              }}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -399,160 +336,6 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
                 )}
               </button>
             )}
-          </div>
-        </div>
-
-        {/* Drag & Drop Alternative */}
-        <div>
-          <div style={sectionLabelStyle}>Batch Drag & Drop</div>
-          <div
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              border: `2px dashed ${isDragging ? "#e07856" : "#252b36"}`,
-              borderRadius: 6,
-              padding: "12px 10px",
-              textAlign: "center",
-              cursor: "pointer",
-              background: isDragging ? "rgba(224,120,86,0.06)" : "#0d0f12",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".tif,.tiff,.png,.jpg,.jpeg,.json,.geojson"
-              style={{ display: "none" }}
-              onChange={handleFileInputChange}
-            />
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                background: "#15181f",
-                border: "1px solid #252b36",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 6px",
-                color: "#e07856",
-              }}
-            >
-              <UploadCloud size={14} />
-            </div>
-            <div
-              style={{
-                fontFamily: "monospace",
-                fontSize: 10,
-                fontWeight: 600,
-                color: "#a2acbd",
-                marginBottom: 2,
-              }}
-            >
-              Drop Image Pair Here
-            </div>
-            <div
-              style={{
-                fontFamily: "sans-serif",
-                fontSize: 8,
-                color: "#4b5565",
-                lineHeight: 1.3,
-              }}
-            >
-              Automatically assigns Pre & Post slots
-            </div>
-          </div>
-        </div>
-
-        {/* Real-Time Benchmark Satellite Imagery */}
-        <div>
-          <div style={{ ...sectionLabelStyle, display: "flex", justifyContent: "space-between", alignItems: "center", color: "#e07856" }}>
-            <span>Real-Time Satellite Pairs</span>
-            <span style={{ fontSize: 8, color: "#48b27e" }}>GSD 0.5m</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {REALTIME_BENCHMARK_PAIRS.map((p, idx) => (
-              <button
-                key={p.id}
-                onClick={() => {
-                  setLivePreFile(null);
-                  setLivePostFile(null);
-                  setPrePreview(null);
-                  setPostPreview(null);
-                  onSelectPreset?.(idx);
-                  onAnalyzeLivePair?.(`/database_samples/${p.id}/pre.png`, `/database_samples/${p.id}/post.png`, p.label);
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "6px 9px",
-                  borderRadius: 5,
-                  border: "1px solid #1c2028",
-                  background: "#0d0f12",
-                  cursor: "pointer",
-                  transition: "all 0.15s ease",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "#15181f";
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = "#e07856";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = "#0d0f12";
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = "#1c2028";
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                  <span
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: 8,
-                      fontWeight: 700,
-                      color: "#5294e2",
-                      background: "rgba(82,148,226,0.1)",
-                      border: "1px solid rgba(82,148,226,0.3)",
-                      padding: "1px 4px",
-                      borderRadius: 3,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {p.tag}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: 10,
-                      color: "#a2acbd",
-                      textAlign: "left",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {p.label}
-                  </span>
-                </div>
-                <span
-                  style={{
-                    fontFamily: "monospace",
-                    fontSize: 8,
-                    fontWeight: 700,
-                    color: "#e07856",
-                    background: "rgba(224,120,86,0.12)",
-                    border: "1px solid rgba(224,120,86,0.25)",
-                    padding: "1px 4px",
-                    borderRadius: 3,
-                    flexShrink: 0,
-                  }}
-                >
-                  {p.span}
-                </span>
-              </button>
-            ))}
           </div>
         </div>
 
