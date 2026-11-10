@@ -114,7 +114,7 @@ class SiameseAdapter(ChangeDetectionAdapter):
                 base_channels = checkpoint["config"].get("base_channels", 64)
             self._model = SiameseChangeDetector(in_channels=3, base_channels=base_channels)
             state_dict = checkpoint.get("model_state_dict", checkpoint)
-            self._model.load_state_dict(state_dict)
+            self._model.load_state_dict(state_dict, strict=False)
             logger.info("Loaded Siamese-CD checkpoint", path=ckpt, base_channels=base_channels)
         else:
             self._model = SiameseChangeDetector(in_channels=3, base_channels=base_channels)
