@@ -147,7 +147,15 @@ export async function POST(req: NextRequest) {
     let agentMode = "statistical_engine";
     let llmErrorNote = "";
 
-    const hasCreds = provider !== "statistical" && (Boolean(llmConfig.api_key) || provider === "ollama");
+    const envKeyMap: Record<string, string | undefined> = {
+      gemini: process.env.GEMINI_API_KEY,
+      openai: process.env.OPENAI_API_KEY,
+      anthropic: process.env.ANTHROPIC_API_KEY,
+      groq: process.env.GROQ_API_KEY,
+      openrouter: process.env.OPENROUTER_API_KEY,
+    };
+    const effectiveKey = (llmConfig.api_key || envKeyMap[provider] || "").trim();
+    const hasCreds = provider !== "statistical" && (Boolean(effectiveKey) || provider === "ollama");
     if (hasCreds) {
       try {
         const res = await invokeLLM({
@@ -222,7 +230,14 @@ async function invokeLLM(opts: {
 }): Promise<{ answer: string; modelUsed: string; visionUsed: boolean }> {
   const { query, systemPrompt, llmConfig, history, preImageB64, postImageB64 } = opts;
   const provider = (llmConfig.provider || "").toLowerCase();
-  const apiKey = (llmConfig.api_key || "").trim();
+  const envKeyMap: Record<string, string | undefined> = {
+    gemini: process.env.GEMINI_API_KEY,
+    openai: process.env.OPENAI_API_KEY,
+    anthropic: process.env.ANTHROPIC_API_KEY,
+    groq: process.env.GROQ_API_KEY,
+    openrouter: process.env.OPENROUTER_API_KEY,
+  };
+  const apiKey = (llmConfig.api_key || envKeyMap[provider] || "").trim();
   const model = (llmConfig.model || "").trim();
   const baseUrl = (llmConfig.base_url || "").trim();
   const enableVision = llmConfig.enable_vision !== false;
